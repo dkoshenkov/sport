@@ -1,0 +1,1170 @@
+openapi: 3.1.0
+info:
+  title: Training Program Service API
+  version: 0.2.0
+  description: |
+    Stateful API contract for the workout program service.
+
+    Auth is local to this service for the MVP: unique nickname plus password.
+    Authenticated requests use an HttpOnly `sid` cookie.
+
+    The `init=1` cookie is a temporary JavaScript-readable bootstrap marker.
+    It is not authentication and must not be used as authorization.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: system
+  - name: bootstrap
+  - name: auth
+  - name: program
+  - name: cycles
+  - name: exercises
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: healthz
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /v1/bootstrap:
+    get:
+      tags: [bootstrap]
+      operationId: bootstrap
+      summary: Initialize client bootstrap state
+      description: Sets `init=1`. This cookie is not auth.
+      responses:
+        "200":
+          description: Bootstrap state
+          headers:
+            Set-Cookie:
+              description: Temporary bootstrap marker.
+              schema:
+                type: string
+              example: init=1; Path=/; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapResponse"
+
+  /v1/auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Create a local user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User created and signed in
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Sign in with nickname and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke current session
+      security:
+        - SessionCookie: []
+      responses:
+        "204":
+          description: Signed out
+          headers:
+            Set-Cookie:
+              description: Expired session cookie.
+              schema:
+                type: string
+              example: sid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Get current authenticated user
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/profile:
+    get:
+      tags: [auth]
+      operationId: getMyProfile
+      summary: Get athlete profile defaults
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Athlete profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AthleteProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [auth]
+      operationId: putMyProfile
+      summary: Save athlete profile defaults
+      description: Profile changes do not automatically rewrite existing cycle settings.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutAthleteProfileRequest"
+      responses:
+        "200":
+          description: Athlete profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AthleteProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/program/options:
+    get:
+      tags: [program]
+      operationId: getProgramOptions
+      summary: Get selectable program options
+      responses:
+        "200":
+          description: Program options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramOptionsResponse"
+
+  /v1/program/calculate:
+    post:
+      tags: [program]
+      operationId: calculateProgram
+      summary: Calculate training days from settings and week
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculateProgramRequest"
+      responses:
+        "200":
+          description: Calculated training plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/cycles/current:
+    get:
+      tags: [cycles]
+      operationId: getCurrentCycle
+      summary: Get current active cycle with editable settings
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Current active cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [cycles]
+      operationId: putCurrentCycle
+      summary: Create or update current active cycle settings
+      description: Settings may be changed while progressing through the cycle.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutCurrentCycleRequest"
+      responses:
+        "200":
+          description: Current active cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/cycles/current/advance:
+    post:
+      tags: [cycles]
+      operationId: advanceCurrentCycle
+      summary: Move the current cycle to another week
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdvanceCycleRequest"
+      responses:
+        "200":
+          description: Updated cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cycles/current/progress:
+    get:
+      tags: [cycles]
+      operationId: listCurrentCycleProgress
+      summary: List checkpoints for the current active cycle
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/WeekQuery"
+      responses:
+        "200":
+          description: Progress checkpoints
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressCheckpointsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cycles/current/progress/checkpoints:
+    put:
+      tags: [cycles]
+      operationId: upsertCurrentCycleCheckpoint
+      summary: Create or update one progress checkpoint
+      description: Upserts by `(cycle, week, dayId, exerciseKey)` for the MVP.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProgressCheckpointRequest"
+      responses:
+        "200":
+          description: Upserted checkpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressCheckpointResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cycles/current/progress/checkpoints/{checkpointId}:
+    delete:
+      tags: [cycles]
+      operationId: deleteCurrentCycleCheckpoint
+      summary: Delete one progress checkpoint
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CheckpointIDPath"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/exercises/{exerciseKey}:
+    get:
+      tags: [exercises]
+      operationId: getExerciseDetails
+      summary: Get details for a program exercise
+      parameters:
+        - $ref: "#/components/parameters/ExerciseKeyPath"
+      responses:
+        "200":
+          description: Exercise details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseDetailsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: HttpOnly authenticated session cookie.
+    InitCookie:
+      type: apiKey
+      in: cookie
+      name: init
+      description: Temporary bootstrap marker. Not authentication.
+
+  headers:
+    SessionCookie:
+      description: HttpOnly authenticated session cookie.
+      schema:
+        type: string
+      example: sid=opaque-session-token; Path=/; HttpOnly; SameSite=Lax
+
+  parameters:
+    WeekQuery:
+      name: week
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/ProgramWeek"
+    CheckpointIDPath:
+      name: checkpointId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ExerciseKeyPath:
+      name: exerciseKey
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid session
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    BootstrapResponse:
+      type: object
+      required: [initCookie, service]
+      properties:
+        initCookie:
+          $ref: "#/components/schemas/InitCookieInfo"
+        service:
+          $ref: "#/components/schemas/ServiceInfo"
+
+    InitCookieInfo:
+      type: object
+      required: [name, value, jsReadable, purpose]
+      properties:
+        name:
+          type: string
+          const: init
+        value:
+          type: string
+          const: "1"
+        jsReadable:
+          type: boolean
+          const: true
+        purpose:
+          type: string
+          example: Temporary bootstrap marker. Not authentication.
+
+    ServiceInfo:
+      type: object
+      required: [authMode, hasDatabase]
+      properties:
+        authMode:
+          type: string
+          const: local_nickname_password
+        hasDatabase:
+          type: boolean
+          const: true
+
+    RegisterRequest:
+      type: object
+      required: [nickname, password]
+      properties:
+        nickname:
+          $ref: "#/components/schemas/Nickname"
+        password:
+          $ref: "#/components/schemas/Password"
+
+    LoginRequest:
+      type: object
+      required: [nickname, password]
+      properties:
+        nickname:
+          $ref: "#/components/schemas/Nickname"
+        password:
+          $ref: "#/components/schemas/Password"
+
+    AuthResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    MeResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    AthleteProfileResponse:
+      type: object
+      required: [profile]
+      properties:
+        profile:
+          $ref: "#/components/schemas/AthleteProfile"
+
+    PutAthleteProfileRequest:
+      type: object
+      required: [profile]
+      properties:
+        profile:
+          $ref: "#/components/schemas/AthleteProfileInput"
+
+    User:
+      type: object
+      required: [id, nickname, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          $ref: "#/components/schemas/Nickname"
+        createdAt:
+          type: string
+          format: date-time
+
+    AthleteProfileInput:
+      type: object
+      required: [oneRepMaxKg, preferredVariant, preferredProgressionStep]
+      properties:
+        oneRepMaxKg:
+          $ref: "#/components/schemas/ProfileOneRepMaxes"
+        preferredVariant:
+          $ref: "#/components/schemas/ProgramVariant"
+        preferredProgressionStep:
+          $ref: "#/components/schemas/ProgressionStep"
+        notes:
+          type: string
+          nullable: true
+          maxLength: 1000
+
+    AthleteProfile:
+      type: object
+      required: [oneRepMaxKg, preferredVariant, preferredProgressionStep, createdAt, updatedAt]
+      properties:
+        oneRepMaxKg:
+          $ref: "#/components/schemas/ProfileOneRepMaxes"
+        preferredVariant:
+          $ref: "#/components/schemas/ProgramVariant"
+        preferredProgressionStep:
+          $ref: "#/components/schemas/ProgressionStep"
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Nickname:
+      type: string
+      minLength: 3
+      maxLength: 32
+      pattern: "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$"
+      example: athlete_1
+
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 128
+      format: password
+
+    ProfileOneRepMaxes:
+      type: object
+      required: [deadlift, bench, squat]
+      properties:
+        deadlift:
+          type: number
+          nullable: true
+          minimum: 1
+          example: 225
+        bench:
+          type: number
+          nullable: true
+          minimum: 1
+          example: 125
+        squat:
+          type: number
+          nullable: true
+          minimum: 1
+          example: 170
+
+    ProgramOptionsResponse:
+      type: object
+      required: [weeks, variants, progressionSteps, assistance, gpp]
+      properties:
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        progressionSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        assistance:
+          $ref: "#/components/schemas/AssistanceOptions"
+        gpp:
+          $ref: "#/components/schemas/GPPOptions"
+
+    SelectOption:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+
+    AssistanceOptions:
+      type: object
+      required: [deadlift, bench, squat]
+      properties:
+        deadlift:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        bench:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        squat:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+
+    GPPOptions:
+      type: object
+      required: [abs, triceps, horizontalPull, biceps, verticalPull, overheadPress]
+      properties:
+        abs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        triceps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        horizontalPull:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        biceps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        verticalPull:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+        overheadPress:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectOption"
+
+    CalculateProgramRequest:
+      type: object
+      required: [selection]
+      properties:
+        selection:
+          $ref: "#/components/schemas/ProgramSelection"
+
+    ProgramSelection:
+      type: object
+      required: [settings, week]
+      properties:
+        settings:
+          $ref: "#/components/schemas/CycleSettings"
+        week:
+          $ref: "#/components/schemas/ProgramWeek"
+
+    CycleSettings:
+      type: object
+      required: [oneRepMaxKg, variant, progressionStep, assistance, gpp]
+      properties:
+        oneRepMaxKg:
+          $ref: "#/components/schemas/OneRepMaxes"
+        variant:
+          $ref: "#/components/schemas/ProgramVariant"
+        progressionStep:
+          $ref: "#/components/schemas/ProgressionStep"
+        assistance:
+          $ref: "#/components/schemas/AssistanceSelection"
+        gpp:
+          $ref: "#/components/schemas/GPPSelection"
+
+    OneRepMaxes:
+      type: object
+      required: [deadlift, bench, squat]
+      properties:
+        deadlift:
+          type: number
+          minimum: 1
+          example: 225
+        bench:
+          type: number
+          minimum: 1
+          example: 125
+        squat:
+          type: number
+          minimum: 1
+          example: 170
+
+    ProgramWeek:
+      type: string
+      enum: [week_1, week_2, week_3, week_4, week_5, week_6, week_7, week_8]
+
+    ProgramVariant:
+      type: string
+      enum: [variant_1, variant_2]
+
+    ProgressionStep:
+      type: string
+      description: |
+        Main-lift progression step. `step_4_percent` matches the current XLSX behavior.
+        `step_5_percent` is an explicit user/program preference, not automatic for `variant_2`.
+      enum: [step_4_percent, step_5_percent]
+
+    AssistanceSelection:
+      type: object
+      required: [deadlift, bench, squat]
+      properties:
+        deadlift:
+          type: string
+          example: romanian_deadlift
+        bench:
+          type: string
+          example: close_grip_bench_press
+        squat:
+          type: string
+          example: front_squat
+
+    GPPSelection:
+      type: object
+      required: [abs, triceps, horizontalPull, biceps, verticalPull, overheadPress]
+      properties:
+        abs:
+          type: string
+          nullable: true
+          example: abs
+        triceps:
+          type: string
+          nullable: true
+          example: triceps
+        horizontalPull:
+          type: string
+          nullable: true
+          example: bent_over_barbell_row
+        biceps:
+          type: string
+          nullable: true
+          example: biceps
+        verticalPull:
+          type: string
+          nullable: true
+          example: lat_pulldown
+        overheadPress:
+          type: string
+          nullable: true
+          example: dumbbell_overhead_press
+
+    CycleResponse:
+      type: object
+      required: [cycle]
+      properties:
+        cycle:
+          $ref: "#/components/schemas/ProgramCycle"
+
+    ProgramCycle:
+      type: object
+      required: [id, title, status, currentWeek, settings, progressSummary, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: Линейный цикл
+        status:
+          $ref: "#/components/schemas/CycleStatus"
+        currentWeek:
+          $ref: "#/components/schemas/ProgramWeek"
+        settings:
+          $ref: "#/components/schemas/CycleSettings"
+        progressSummary:
+          $ref: "#/components/schemas/ProgressSummary"
+        startedAt:
+          type: string
+          nullable: true
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CycleStatus:
+      type: string
+      enum: [active, completed, archived]
+
+    ProgressSummary:
+      type: object
+      required: [done, partial, skipped, planned]
+      properties:
+        done:
+          type: integer
+          minimum: 0
+        partial:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        planned:
+          type: integer
+          minimum: 0
+
+    PutCurrentCycleRequest:
+      type: object
+      required: [title, currentWeek, settings]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        currentWeek:
+          $ref: "#/components/schemas/ProgramWeek"
+        settings:
+          $ref: "#/components/schemas/CycleSettings"
+        changeReason:
+          type: string
+          nullable: true
+          maxLength: 500
+
+    AdvanceCycleRequest:
+      type: object
+      required: [targetWeek]
+      properties:
+        targetWeek:
+          $ref: "#/components/schemas/ProgramWeek"
+        note:
+          type: string
+          nullable: true
+          maxLength: 500
+
+    TrainingPlanResponse:
+      type: object
+      required: [selection, days, formulaVersion, warnings]
+      properties:
+        selection:
+          $ref: "#/components/schemas/ProgramSelection"
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingDay"
+        formulaVersion:
+          type: string
+          example: xlsx-linear-cycle-v1
+        warnings:
+          type: array
+          items:
+            type: string
+
+    TrainingDay:
+      type: object
+      required: [id, label, rows]
+      properties:
+        id:
+          type: string
+          enum: [day_1, day_2, day_3]
+        label:
+          type: string
+          example: День 1
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingRow"
+
+    TrainingRow:
+      type: object
+      required: [rowId, exerciseKey, exerciseName, kind, prescription]
+      properties:
+        rowId:
+          type: string
+          example: day_1_deadlift_main
+        exerciseKey:
+          type: string
+          example: deadlift
+        exerciseName:
+          type: string
+          example: Становая тяга
+        kind:
+          $ref: "#/components/schemas/TrainingRowKind"
+        prescription:
+          $ref: "#/components/schemas/Prescription"
+
+    TrainingRowKind:
+      type: string
+      enum: [main, assistance, gpp]
+
+    Prescription:
+      type: object
+      required: [setsRepsText]
+      properties:
+        setsRepsText:
+          type: string
+          example: 5х5
+        weightKg:
+          type: number
+          nullable: true
+          example: 155
+        weightText:
+          type: string
+          nullable: true
+          example: 1ПМ
+        rpeText:
+          type: string
+          nullable: true
+          example: "RPE: 6-7"
+        unit:
+          type: string
+          nullable: true
+          example: т
+
+    ProgressCheckpointsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgressCheckpoint"
+
+    ProgressCheckpointResponse:
+      type: object
+      required: [checkpoint]
+      properties:
+        checkpoint:
+          $ref: "#/components/schemas/ProgressCheckpoint"
+
+    UpsertProgressCheckpointRequest:
+      type: object
+      required: [checkpoint]
+      properties:
+        checkpoint:
+          $ref: "#/components/schemas/ProgressCheckpointInput"
+
+    ProgressCheckpointInput:
+      type: object
+      required: [week, dayId, exerciseKey, rowKind, status]
+      properties:
+        week:
+          $ref: "#/components/schemas/ProgramWeek"
+        dayId:
+          type: string
+          enum: [day_1, day_2, day_3]
+        exerciseKey:
+          type: string
+        rowKind:
+          $ref: "#/components/schemas/TrainingRowKind"
+        status:
+          $ref: "#/components/schemas/CheckpointStatus"
+        prescribed:
+          $ref: "#/components/schemas/CheckpointPrescriptionSnapshot"
+        completed:
+          $ref: "#/components/schemas/CheckpointCompletedData"
+        notes:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+
+    ProgressCheckpoint:
+      type: object
+      required: [id, week, dayId, exerciseKey, rowKind, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        week:
+          $ref: "#/components/schemas/ProgramWeek"
+        dayId:
+          type: string
+          enum: [day_1, day_2, day_3]
+        exerciseKey:
+          type: string
+        rowKind:
+          $ref: "#/components/schemas/TrainingRowKind"
+        status:
+          $ref: "#/components/schemas/CheckpointStatus"
+        prescribed:
+          $ref: "#/components/schemas/CheckpointPrescriptionSnapshot"
+        completed:
+          $ref: "#/components/schemas/CheckpointCompletedData"
+        notes:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CheckpointStatus:
+      type: string
+      enum: [planned, done, skipped, partial]
+
+    CheckpointPrescriptionSnapshot:
+      type: object
+      properties:
+        sets:
+          type: integer
+          nullable: true
+          minimum: 1
+        repsText:
+          type: string
+          nullable: true
+          example: 6-10
+        weightKg:
+          type: number
+          nullable: true
+        rpeText:
+          type: string
+          nullable: true
+
+    CheckpointCompletedData:
+      type: object
+      properties:
+        sets:
+          type: integer
+          nullable: true
+          minimum: 0
+        repsText:
+          type: string
+          nullable: true
+          example: "5,5,4"
+        weightKg:
+          type: number
+          nullable: true
+        rpeText:
+          type: string
+          nullable: true
+
+    ExerciseDetailsResponse:
+      type: object
+      required: [exercise]
+      properties:
+        exercise:
+          $ref: "#/components/schemas/ExerciseDetails"
+
+    ExerciseDetails:
+      type: object
+      required: [exerciseKey, name, aliasStatus, media]
+      properties:
+        exerciseKey:
+          type: string
+        name:
+          type: string
+        datasetExerciseId:
+          type: string
+          nullable: true
+        aliasStatus:
+          type: string
+          enum: [confirmed, missing, needs_review]
+        equipment:
+          type: string
+          nullable: true
+        targetMuscles:
+          type: array
+          items:
+            type: string
+        secondaryMuscles:
+          type: array
+          items:
+            type: string
+        instructions:
+          type: array
+          items:
+            type: string
+        media:
+          $ref: "#/components/schemas/ExerciseMedia"
+
+    ExerciseMedia:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [available, missing]
+        gifUrl:
+          type: string
+          nullable: true
+          format: uri
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/APIError"
+
+    APIError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: validation_error
+        message:
+          type: string
+          example: request validation failed
+        details:
+          type: array
+          items:
+            type: string

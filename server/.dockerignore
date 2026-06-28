@@ -1,0 +1,6 @@
+.git
+bin
+tmp
+exercise-media.json
+*.test
+coverage.out
