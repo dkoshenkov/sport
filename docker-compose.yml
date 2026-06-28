@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sport
+      POSTGRES_USER: sport
+      POSTGRES_PASSWORD: sport
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sport -d sport"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      ENV: dev
+      SERVICE_NAME: sport-api
+      SPORT_API_ADDR: :8080
+      SPORT_MAIN_DOMAIN: ${SPORT_MAIN_DOMAIN:-example.com}
+      EXERCISE_MEDIA_BASE_URL: ${EXERCISE_MEDIA_BASE_URL:-}
+      EXERCISE_MEDIA_MANIFEST: ${EXERCISE_MEDIA_MANIFEST:-}
+      DATABASE_URL: postgres://sport:sport@postgres:5432/sport?sslmode=disable
+      DATABASE_RUN_MIGRATIONS: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_PRETTY: ${LOG_PRETTY:-false}
+      HTTP_REQUEST_ID_HEADER: X-Request-ID
+      HTTP_TIMEOUT: 30s
+      HTTP_LOG_REQUESTS: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
