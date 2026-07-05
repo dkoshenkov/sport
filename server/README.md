@@ -28,17 +28,38 @@ Configuration uses `github.com/dkoshenkov/packages-go/configx`.
 Logging uses `github.com/dkoshenkov/packages-go/logx`.
 HTTP request ID, timeout, recovery, and logging middleware use `github.com/dkoshenkov/packages-go/middlewarex/httpx`.
 
-## Sync Exercise GIFs to S3
+## Sync Exercise Dataset and GIFs
 
 ```bash
-S3_BUCKET=my-bucket \
-SPORT_MAIN_DOMAIN=example.com \
-go run ./cmd/sync-exercise-media --out exercise-media.json
+DATABASE_URL='postgres://sport:sport@localhost:35432/sport?sslmode=disable' \
+EXERCISE_DATASET_DIR=../exercises-dataset \
+EXERCISE_MEDIA_BASE_URL='http://127.0.0.1:38174' \
+EXERCISE_MEDIA_SOURCE_DIR=../exercises-gifs \
+EXERCISE_MEDIA_STORAGE_MODE=local \
+EXERCISE_MEDIA_LOCAL_DIR=../client/public/exercises \
+EXERCISE_MEDIA_MANIFEST=../client/public/exercises/exercise-media.json \
+go run ./cmd/sync-exercise-media
 ```
 
-The sync command clones `hasaneyldrm/exercises-dataset` into a temporary directory,
-matches only the program alias layer, uploads GIFs to `s3://$S3_BUCKET/exercises/`,
-and writes a manifest consumable by `EXERCISE_MEDIA_MANIFEST`.
+With Docker Compose:
 
-By default manifest URLs use `https://media.<SPORT_MAIN_DOMAIN>/exercises/...`.
-Set `EXERCISE_MEDIA_BASE_URL` to override that, for example to a CloudFront URL.
+```bash
+make docker-sync-media
+```
+
+The sync command clones `hasaneyldrm/exercises-dataset`, imports all dataset
+records into Postgres, applies the program alias/RU override layer, downloads
+GIFs, and writes media rows into `exercise_media`.
+
+Set `EXERCISE_DATASET_DIR` to read an already cloned local dataset instead of
+cloning GitHub on each run. Set `EXERCISE_MEDIA_SOURCE_DIR` to a local GIF
+mirror; the sync command looks for `assets/<dataset_id>.gif`,
+`<dataset_id>.gif`, `<media_id>.gif`, and old `gif_url` basenames. If no local
+file exists, `EXERCISE_MEDIA_SOURCE_BASE_URL` can still point to a licensed
+mirror/CDN that serves `${media_id}.gif`. Local mode stores files under
+`client/public/exercises` and exposes them as
+`${EXERCISE_MEDIA_BASE_URL}/exercises/<dataset_id>.gif`.
+
+For S3 mode, set `EXERCISE_MEDIA_STORAGE_MODE=s3` and `S3_BUCKET=my-bucket`.
+By default manifest URLs use `https://media.<SPORT_MAIN_DOMAIN>/exercises/...`;
+set `EXERCISE_MEDIA_BASE_URL` to override that, for example to CloudFront.

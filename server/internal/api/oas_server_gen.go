@@ -8,6 +8,12 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// ActivateCycle implements activateCycle operation.
+	//
+	// Activating a cycle archives the user's previous active cycle.
+	//
+	// POST /v1/cycles/{cycleId}/activate
+	ActivateCycle(ctx context.Context, params ActivateCycleParams) (ActivateCycleRes, error)
 	// AdvanceCurrentCycle implements advanceCurrentCycle operation.
 	//
 	// Move the current cycle to another week.
@@ -26,18 +32,42 @@ type Handler interface {
 	//
 	// POST /v1/program/calculate
 	CalculateProgram(ctx context.Context, req *CalculateProgramRequest) (CalculateProgramRes, error)
+	// CreateCycle implements createCycle operation.
+	//
+	// Creating a cycle archives the user's previous active cycle.
+	//
+	// POST /v1/cycles
+	CreateCycle(ctx context.Context, req *PutCurrentCycleRequest) (CreateCycleRes, error)
 	// DeleteCurrentCycleCheckpoint implements deleteCurrentCycleCheckpoint operation.
 	//
 	// Delete one progress checkpoint.
 	//
 	// DELETE /v1/cycles/current/progress/checkpoints/{checkpointId}
 	DeleteCurrentCycleCheckpoint(ctx context.Context, params DeleteCurrentCycleCheckpointParams) (DeleteCurrentCycleCheckpointRes, error)
+	// GetAuthSession implements getAuthSession operation.
+	//
+	// Probe current session without requiring authentication.
+	//
+	// GET /v1/auth/session
+	GetAuthSession(ctx context.Context, params GetAuthSessionParams) (*SessionResponse, error)
+	// GetCatalogExercise implements getCatalogExercise operation.
+	//
+	// Get details for a dataset exercise.
+	//
+	// GET /v1/exercises/catalog/{datasetExerciseId}
+	GetCatalogExercise(ctx context.Context, params GetCatalogExerciseParams) (GetCatalogExerciseRes, error)
 	// GetCurrentCycle implements getCurrentCycle operation.
 	//
 	// Get current active cycle with editable settings.
 	//
 	// GET /v1/cycles/current
 	GetCurrentCycle(ctx context.Context) (GetCurrentCycleRes, error)
+	// GetCurrentCyclePlan implements getCurrentCyclePlan operation.
+	//
+	// Calculate the current active cycle plan.
+	//
+	// GET /v1/cycles/current/plan
+	GetCurrentCyclePlan(ctx context.Context) (GetCurrentCyclePlanRes, error)
 	// GetExerciseDetails implements getExerciseDetails operation.
 	//
 	// Get details for a program exercise.
@@ -61,7 +91,7 @@ type Handler interface {
 	// Get selectable program options.
 	//
 	// GET /v1/program/options
-	GetProgramOptions(ctx context.Context) (*ProgramOptionsResponse, error)
+	GetProgramOptions(ctx context.Context) (GetProgramOptionsRes, error)
 	// Healthz implements healthz operation.
 	//
 	// Health check.
@@ -74,6 +104,18 @@ type Handler interface {
 	//
 	// GET /v1/cycles/current/progress
 	ListCurrentCycleProgress(ctx context.Context, params ListCurrentCycleProgressParams) (ListCurrentCycleProgressRes, error)
+	// ListCycles implements listCycles operation.
+	//
+	// List user's cycles.
+	//
+	// GET /v1/cycles
+	ListCycles(ctx context.Context) (ListCyclesRes, error)
+	// ListExercises implements listExercises operation.
+	//
+	// Search dataset exercise catalog.
+	//
+	// GET /v1/exercises
+	ListExercises(ctx context.Context, params ListExercisesParams) (ListExercisesRes, error)
 	// Login implements login operation.
 	//
 	// Sign in with nickname and password.
@@ -92,6 +134,12 @@ type Handler interface {
 	//
 	// PUT /v1/cycles/current
 	PutCurrentCycle(ctx context.Context, req *PutCurrentCycleRequest) (PutCurrentCycleRes, error)
+	// PutCycle implements putCycle operation.
+	//
+	// Update a cycle by id.
+	//
+	// PUT /v1/cycles/{cycleId}
+	PutCycle(ctx context.Context, req *PutCurrentCycleRequest, params PutCycleParams) (PutCycleRes, error)
 	// PutMyProfile implements putMyProfile operation.
 	//
 	// Profile changes do not automatically rewrite existing cycle settings.

@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -180,6 +183,76 @@ func (s *PostgresStore) SaveProfile(ctx context.Context, userID uuid.UUID, input
 	return profile, nil
 }
 
+func (s *PostgresStore) ListCycles(ctx context.Context, userID uuid.UUID) ([]api.ProgramCycle, uuid.UUID, bool, error) {
+	rows, err := s.pool.Query(ctx, cycleQuery()+`
+		WHERE c.user_id = $1
+	`+cycleGroupBy()+`
+		ORDER BY CASE WHEN c.status = 'active' THEN 0 ELSE 1 END, c.updated_at DESC
+	`, userID)
+	if err != nil {
+		return nil, uuid.UUID{}, false, fmt.Errorf("list cycles: %w", err)
+	}
+	defer rows.Close()
+
+	cycles := []api.ProgramCycle{}
+	var currentID uuid.UUID
+	var hasCurrent bool
+	for rows.Next() {
+		cycle, err := scanCycle(rows)
+		if err != nil {
+			return nil, uuid.UUID{}, false, err
+		}
+		if cycle.Status == api.CycleStatusActive {
+			currentID = cycle.ID
+			hasCurrent = true
+		}
+		cycles = append(cycles, cycle)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, uuid.UUID{}, false, fmt.Errorf("iterate cycles: %w", err)
+	}
+	return cycles, currentID, hasCurrent, nil
+}
+
+func (s *PostgresStore) CreateCycle(ctx context.Context, userID uuid.UUID, title string, week api.ProgramWeek, settings api.CycleSettings) (api.ProgramCycle, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return api.ProgramCycle{}, fmt.Errorf("begin create cycle: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE program_cycles
+		SET status = 'archived', updated_at = now()
+		WHERE user_id = $1 AND status = 'active'
+	`, userID); err != nil {
+		return api.ProgramCycle{}, fmt.Errorf("archive active cycle: %w", err)
+	}
+
+	var cycleID uuid.UUID
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO program_cycles (user_id, title, status, current_week, started_at)
+		VALUES ($1, $2, 'active', $3, now())
+		RETURNING id
+	`, userID, title, week).Scan(&cycleID); err != nil {
+		return api.ProgramCycle{}, fmt.Errorf("insert cycle: %w", err)
+	}
+	if err := upsertCycleSettings(ctx, tx, cycleID, settings); err != nil {
+		return api.ProgramCycle{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return api.ProgramCycle{}, fmt.Errorf("commit create cycle: %w", err)
+	}
+	cycle, ok, err := s.Cycle(ctx, userID, cycleID)
+	if err != nil {
+		return api.ProgramCycle{}, err
+	}
+	if !ok {
+		return api.ProgramCycle{}, errNotFound
+	}
+	return cycle, nil
+}
+
 func (s *PostgresStore) CurrentCycle(ctx context.Context, userID uuid.UUID) (api.ProgramCycle, bool, error) {
 	cycle, err := scanCycle(s.pool.QueryRow(ctx, cycleQuery()+` WHERE c.user_id = $1 AND c.status = 'active'`+cycleGroupBy(), userID))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -187,6 +260,17 @@ func (s *PostgresStore) CurrentCycle(ctx context.Context, userID uuid.UUID) (api
 	}
 	if err != nil {
 		return api.ProgramCycle{}, false, fmt.Errorf("select current cycle: %w", err)
+	}
+	return cycle, true, nil
+}
+
+func (s *PostgresStore) Cycle(ctx context.Context, userID, cycleID uuid.UUID) (api.ProgramCycle, bool, error) {
+	cycle, err := scanCycle(s.pool.QueryRow(ctx, cycleQuery()+` WHERE c.user_id = $1 AND c.id = $2`+cycleGroupBy(), userID, cycleID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return api.ProgramCycle{}, false, nil
+	}
+	if err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("select cycle: %w", err)
 	}
 	return cycle, true, nil
 }
@@ -264,6 +348,71 @@ func (s *PostgresStore) SaveCurrentCycle(ctx context.Context, userID uuid.UUID, 
 		return api.ProgramCycle{}, errNotFound
 	}
 	return cycle, nil
+}
+
+func (s *PostgresStore) SaveCycle(ctx context.Context, userID, cycleID uuid.UUID, title string, week api.ProgramWeek, settings api.CycleSettings) (api.ProgramCycle, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("begin save cycle: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE program_cycles
+		SET title = $3, current_week = $4, updated_at = now()
+		WHERE user_id = $1 AND id = $2
+	`, userID, cycleID, title, week)
+	if err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("update cycle: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return api.ProgramCycle{}, false, nil
+	}
+	if err := upsertCycleSettings(ctx, tx, cycleID, settings); err != nil {
+		return api.ProgramCycle{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("commit save cycle: %w", err)
+	}
+	cycle, ok, err := s.Cycle(ctx, userID, cycleID)
+	return cycle, ok, err
+}
+
+func (s *PostgresStore) ActivateCycle(ctx context.Context, userID, cycleID uuid.UUID) (api.ProgramCycle, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("begin activate cycle: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM program_cycles WHERE user_id = $1 AND id = $2)
+	`, userID, cycleID).Scan(&exists); err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("check cycle: %w", err)
+	}
+	if !exists {
+		return api.ProgramCycle{}, false, nil
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE program_cycles
+		SET status = 'archived', updated_at = now()
+		WHERE user_id = $1 AND status = 'active' AND id <> $2
+	`, userID, cycleID); err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("archive previous active cycle: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE program_cycles
+		SET status = 'active', started_at = COALESCE(started_at, now()), updated_at = now()
+		WHERE user_id = $1 AND id = $2
+	`, userID, cycleID); err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("activate cycle: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return api.ProgramCycle{}, false, fmt.Errorf("commit activate cycle: %w", err)
+	}
+	cycle, ok, err := s.Cycle(ctx, userID, cycleID)
+	return cycle, ok, err
 }
 
 func (s *PostgresStore) AdvanceCycle(ctx context.Context, userID uuid.UUID, week api.ProgramWeek) (api.ProgramCycle, bool, error) {
@@ -373,12 +522,337 @@ func (s *PostgresStore) DeleteProgress(ctx context.Context, cycleID, checkpointI
 	return tag.RowsAffected() > 0, nil
 }
 
+func (s *PostgresStore) ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ExerciseCatalogListResponse, error) {
+	limit := 30
+	if value, ok := params.Limit.Get(); ok {
+		limit = value
+	}
+	offset := 0
+	if value, ok := params.Offset.Get(); ok {
+		offset = value
+	}
+
+	args := []any{}
+	where := []string{"TRUE"}
+	if query, ok := params.Query.Get(); ok && strings.TrimSpace(query) != "" {
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(query))+"%")
+		idx := len(args)
+		where = append(where, fmt.Sprintf(`(
+			lower(c.name) LIKE $%[1]d OR
+			lower(COALESCE(t.name_ru, '')) LIKE $%[1]d OR
+			lower(COALESCE(a.program_name_ru, '')) LIKE $%[1]d OR
+			lower(COALESCE(c.equipment, '')) LIKE $%[1]d OR
+			lower(COALESCE(c.target, '')) LIKE $%[1]d OR
+			lower(array_to_string(COALESCE(c.secondary_muscles, '{}'), ' ')) LIKE $%[1]d
+		)`, idx))
+	}
+	if hasGif, ok := params.HasGif.Get(); ok && hasGif {
+		where = append(where, "m.gif_url IS NOT NULL AND m.gif_url <> ''")
+	}
+	whereSQL := strings.Join(where, " AND ")
+
+	var total int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM exercise_catalog c
+		LEFT JOIN exercise_media m ON m.dataset_exercise_id = c.dataset_exercise_id
+		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = c.dataset_exercise_id
+		LEFT JOIN exercise_aliases a ON a.dataset_exercise_id = c.dataset_exercise_id
+		WHERE `+whereSQL,
+		args...,
+	).Scan(&total); err != nil {
+		return api.ExerciseCatalogListResponse{}, fmt.Errorf("count exercises: %w", err)
+	}
+
+	limitParam := len(args) + 1
+	offsetParam := len(args) + 2
+	queryArgs := append(append([]any{}, args...), limit, offset)
+	rows, err := s.pool.Query(ctx, catalogExerciseSelect()+`
+		WHERE `+whereSQL+`
+		ORDER BY COALESCE(t.name_ru, c.name), c.name
+		LIMIT $`+fmt.Sprint(limitParam)+` OFFSET $`+fmt.Sprint(offsetParam),
+		queryArgs...,
+	)
+	if err != nil {
+		return api.ExerciseCatalogListResponse{}, fmt.Errorf("list exercises: %w", err)
+	}
+	defer rows.Close()
+
+	items := []api.ExerciseCatalogItem{}
+	for rows.Next() {
+		item, err := scanCatalogExercise(rows)
+		if err != nil {
+			return api.ExerciseCatalogListResponse{}, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return api.ExerciseCatalogListResponse{}, fmt.Errorf("iterate exercises: %w", err)
+	}
+	return api.ExerciseCatalogListResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *PostgresStore) CatalogExercise(ctx context.Context, datasetExerciseID string) (api.ExerciseCatalogItem, bool, error) {
+	item, err := scanCatalogExercise(s.pool.QueryRow(ctx, catalogExerciseSelect()+`
+		WHERE c.dataset_exercise_id = $1
+	`, datasetExerciseID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return api.ExerciseCatalogItem{}, false, nil
+	}
+	if err != nil {
+		return api.ExerciseCatalogItem{}, false, fmt.Errorf("select catalog exercise: %w", err)
+	}
+	return item, true, nil
+}
+
+func (s *PostgresStore) ExerciseDetails(ctx context.Context, exerciseKey string) (api.ExerciseDetails, bool, error) {
+	var details api.ExerciseDetails
+	var datasetID, datasetName, notes, equipment, target pgtype.Text
+	var gifURL, storageKey, provenance pgtype.Text
+	var width, height pgtype.Int4
+	var mediaUpdatedAt pgtype.Timestamptz
+	var secondary []string
+	var instructionSteps []byte
+	var instructionsRU []string
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			a.program_exercise_key,
+			COALESCE(t.name_ru, a.program_name_ru),
+			a.dataset_exercise_id,
+			COALESCE(a.dataset_name, c.name),
+			a.review_status,
+			a.notes,
+			c.equipment,
+			c.target,
+			COALESCE(c.secondary_muscles, '{}'),
+			COALESCE(c.instruction_steps, '{}'::jsonb),
+			COALESCE(t.instructions_ru, '{}'),
+			COALESCE(m.status, 'missing'),
+			m.gif_url,
+			m.storage_key,
+			m.width,
+			m.height,
+			m.provenance,
+			m.updated_at
+		FROM exercise_aliases a
+		LEFT JOIN exercise_catalog c ON c.dataset_exercise_id = a.dataset_exercise_id
+		LEFT JOIN exercise_media m ON m.dataset_exercise_id = a.dataset_exercise_id
+		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = a.dataset_exercise_id
+		WHERE a.program_exercise_key = $1
+	`, exerciseKey).Scan(
+		&details.ExerciseKey,
+		&details.Name,
+		&datasetID,
+		&datasetName,
+		&details.AliasStatus,
+		&notes,
+		&equipment,
+		&target,
+		&secondary,
+		&instructionSteps,
+		&instructionsRU,
+		&details.Media.Status,
+		&gifURL,
+		&storageKey,
+		&width,
+		&height,
+		&provenance,
+		&mediaUpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return api.ExerciseDetails{}, false, nil
+	}
+	if err != nil {
+		return api.ExerciseDetails{}, false, fmt.Errorf("select exercise details: %w", err)
+	}
+
+	details.DatasetExerciseId = textToOptNil(datasetID)
+	details.DatasetName = textToOptNil(datasetName)
+	details.Equipment = textToOptNil(equipment)
+	if target.Valid && target.String != "" {
+		details.TargetMuscles = []string{target.String}
+	} else {
+		details.TargetMuscles = []string{}
+	}
+	details.SecondaryMuscles = append([]string(nil), secondary...)
+	details.Instructions = selectInstructions(instructionSteps, instructionsRU)
+	if len(details.Instructions) == 0 && notes.Valid {
+		details.Instructions = []string{}
+	}
+	if details.Media.Status == "" {
+		details.Media.Status = api.ExerciseMediaStatusMissing
+	}
+	applyMediaFields(&details.Media, gifURL, storageKey, width, height, provenance, mediaUpdatedAt)
+	return details, true, nil
+}
+
+func upsertCycleSettings(ctx context.Context, tx pgx.Tx, cycleID uuid.UUID, settings api.CycleSettings) error {
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO cycle_settings (
+			cycle_id, deadlift_1rm_kg, bench_1rm_kg, squat_1rm_kg,
+			variant, progression_step, deadlift_assistance, bench_assistance, squat_assistance,
+			gpp_abs, gpp_triceps, gpp_horizontal_pull, gpp_biceps, gpp_vertical_pull, gpp_overhead_press
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		ON CONFLICT (cycle_id) DO UPDATE SET
+			deadlift_1rm_kg = EXCLUDED.deadlift_1rm_kg,
+			bench_1rm_kg = EXCLUDED.bench_1rm_kg,
+			squat_1rm_kg = EXCLUDED.squat_1rm_kg,
+			variant = EXCLUDED.variant,
+			progression_step = EXCLUDED.progression_step,
+			deadlift_assistance = EXCLUDED.deadlift_assistance,
+			bench_assistance = EXCLUDED.bench_assistance,
+			squat_assistance = EXCLUDED.squat_assistance,
+			gpp_abs = EXCLUDED.gpp_abs,
+			gpp_triceps = EXCLUDED.gpp_triceps,
+			gpp_horizontal_pull = EXCLUDED.gpp_horizontal_pull,
+			gpp_biceps = EXCLUDED.gpp_biceps,
+			gpp_vertical_pull = EXCLUDED.gpp_vertical_pull,
+			gpp_overhead_press = EXCLUDED.gpp_overhead_press,
+			updated_at = now()
+	`, cycleID,
+		settings.OneRepMaxKg.Deadlift,
+		settings.OneRepMaxKg.Bench,
+		settings.OneRepMaxKg.Squat,
+		settings.Variant,
+		settings.ProgressionStep,
+		settings.Assistance.Deadlift,
+		settings.Assistance.Bench,
+		settings.Assistance.Squat,
+		nilStringValue(settings.Gpp.Abs),
+		nilStringValue(settings.Gpp.Triceps),
+		nilStringValue(settings.Gpp.HorizontalPull),
+		nilStringValue(settings.Gpp.Biceps),
+		nilStringValue(settings.Gpp.VerticalPull),
+		nilStringValue(settings.Gpp.OverheadPress),
+	); err != nil {
+		return fmt.Errorf("upsert cycle settings: %w", err)
+	}
+	return nil
+}
+
+func catalogExerciseSelect() string {
+	return `
+		SELECT
+			c.dataset_exercise_id,
+			c.name,
+			t.name_ru,
+			c.category,
+			c.body_part,
+			c.equipment,
+			c.target,
+			COALESCE(c.secondary_muscles, '{}'),
+			COALESCE(c.instruction_steps, '{}'::jsonb),
+			COALESCE(t.instructions_ru, '{}'),
+			COALESCE(m.status, 'missing'),
+			m.gif_url,
+			m.storage_key,
+			m.width,
+			m.height,
+			m.provenance,
+			m.updated_at
+		FROM exercise_catalog c
+		LEFT JOIN exercise_media m ON m.dataset_exercise_id = c.dataset_exercise_id
+		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = c.dataset_exercise_id
+		LEFT JOIN exercise_aliases a ON a.dataset_exercise_id = c.dataset_exercise_id
+	`
+}
+
+func scanCatalogExercise(row pgx.Row) (api.ExerciseCatalogItem, error) {
+	var item api.ExerciseCatalogItem
+	var nameRU, category, bodyPart, equipment, target pgtype.Text
+	var gifURL, storageKey, provenance pgtype.Text
+	var width, height pgtype.Int4
+	var mediaUpdatedAt pgtype.Timestamptz
+	var secondary []string
+	var instructionSteps []byte
+	var instructionsRU []string
+
+	if err := row.Scan(
+		&item.DatasetExerciseId,
+		&item.Name,
+		&nameRU,
+		&category,
+		&bodyPart,
+		&equipment,
+		&target,
+		&secondary,
+		&instructionSteps,
+		&instructionsRU,
+		&item.Media.Status,
+		&gifURL,
+		&storageKey,
+		&width,
+		&height,
+		&provenance,
+		&mediaUpdatedAt,
+	); err != nil {
+		return api.ExerciseCatalogItem{}, err
+	}
+	item.NameRu = textToOptNil(nameRU)
+	item.Category = textToOptNil(category)
+	item.BodyPart = textToOptNil(bodyPart)
+	item.Equipment = textToOptNil(equipment)
+	if target.Valid && target.String != "" {
+		item.TargetMuscles = []string{target.String}
+	} else {
+		item.TargetMuscles = []string{}
+	}
+	item.SecondaryMuscles = append([]string(nil), secondary...)
+	item.Instructions = selectInstructions(instructionSteps, instructionsRU)
+	if item.Media.Status == "" {
+		item.Media.Status = api.ExerciseMediaStatusMissing
+	}
+	applyMediaFields(&item.Media, gifURL, storageKey, width, height, provenance, mediaUpdatedAt)
+	return item, nil
+}
+
 func profileQuery() string {
 	return `
 		SELECT deadlift_1rm_kg::float8, bench_1rm_kg::float8, squat_1rm_kg::float8,
 			preferred_variant, preferred_progression_step, notes, created_at, updated_at
 		FROM athlete_profiles
 	`
+}
+
+func selectInstructions(instructionSteps []byte, ruOverride []string) []string {
+	if len(ruOverride) > 0 {
+		return append([]string(nil), ruOverride...)
+	}
+	var byLanguage map[string][]string
+	if len(instructionSteps) != 0 {
+		_ = json.Unmarshal(instructionSteps, &byLanguage)
+	}
+	for _, lang := range []string{"ru", "en"} {
+		if steps := byLanguage[lang]; len(steps) > 0 {
+			return append([]string(nil), steps...)
+		}
+	}
+	for _, steps := range byLanguage {
+		if len(steps) > 0 {
+			return append([]string(nil), steps...)
+		}
+	}
+	return []string{}
+}
+
+func applyMediaFields(media *api.ExerciseMedia, gifURL pgtype.Text, storageKey pgtype.Text, width pgtype.Int4, height pgtype.Int4, provenance pgtype.Text, updatedAt pgtype.Timestamptz) {
+	if gifURL.Valid && gifURL.String != "" {
+		if parsed, err := url.Parse(gifURL.String); err == nil {
+			media.GifUrl = api.NewOptNilURI(*parsed)
+			media.Status = api.ExerciseMediaStatusAvailable
+		}
+	}
+	media.StorageKey = textToOptNil(storageKey)
+	media.Provenance = textToOptNil(provenance)
+	if width.Valid {
+		media.Width = api.NewOptNilInt(int(width.Int32))
+	}
+	if height.Valid {
+		media.Height = api.NewOptNilInt(int(height.Int32))
+	}
+	media.UpdatedAt = timeToOptNil(updatedAt)
 }
 
 func scanProfile(row pgx.Row) (api.AthleteProfile, error) {

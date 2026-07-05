@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -110,6 +111,28 @@ func (h *Handler) Logout(ctx context.Context) (api.LogoutRes, error) {
 	return &api.LogoutNoContent{SetCookie: api.NewOptString("sid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")}, nil
 }
 
+func (h *Handler) GetAuthSession(ctx context.Context, params api.GetAuthSessionParams) (*api.SessionResponse, error) {
+	token, ok := params.Sid.Get()
+	if !ok || token == "" {
+		return &api.SessionResponse{Authenticated: false}, nil
+	}
+	session, ok, err := h.store.Session(ctx, hashToken(token))
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.SessionResponse{Authenticated: false}, nil
+	}
+	user, ok, err := h.store.UserByID(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.SessionResponse{Authenticated: false}, nil
+	}
+	return &api.SessionResponse{Authenticated: true, User: api.NewOptUser(user)}, nil
+}
+
 func (h *Handler) GetMe(ctx context.Context) (api.GetMeRes, error) {
 	user, err := h.currentUser(ctx)
 	if err != nil {
@@ -145,16 +168,82 @@ func (h *Handler) PutMyProfile(ctx context.Context, req *api.PutAthleteProfileRe
 	return &api.AthleteProfileResponse{Profile: profile}, nil
 }
 
-func (h *Handler) GetProgramOptions(ctx context.Context) (*api.ProgramOptionsResponse, error) {
+func (h *Handler) GetProgramOptions(ctx context.Context) (api.GetProgramOptionsRes, error) {
 	return program.Options(), nil
 }
 
 func (h *Handler) CalculateProgram(ctx context.Context, req *api.CalculateProgramRequest) (api.CalculateProgramRes, error) {
 	plan, err := program.Calculate(req.Selection)
 	if err != nil {
-		return &api.ErrorResponse{Error: errorBody("validation_error", err.Error())}, nil
+		return &api.CalculateProgramBadRequest{Error: errorBody("validation_error", err.Error())}, nil
 	}
 	return plan, nil
+}
+
+func (h *Handler) ListCycles(ctx context.Context) (api.ListCyclesRes, error) {
+	user, err := h.currentUser(ctx)
+	if err != nil {
+		return unauthorized(), nil
+	}
+	cycles, currentID, hasCurrent, err := h.store.ListCycles(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	response := &api.CyclesResponse{Cycles: cycles}
+	if hasCurrent {
+		response.CurrentCycleId = api.NewOptNilUUID(currentID)
+	} else {
+		response.CurrentCycleId.SetToNull()
+	}
+	return response, nil
+}
+
+func (h *Handler) CreateCycle(ctx context.Context, req *api.PutCurrentCycleRequest) (api.CreateCycleRes, error) {
+	user, err := h.currentUser(ctx)
+	if err != nil {
+		return &api.CreateCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
+	}
+	if _, err := program.Calculate(api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+		return &api.CreateCycleBadRequest{Error: errorBody("validation_error", err.Error())}, nil
+	}
+	cycle, err := h.store.CreateCycle(ctx, user.ID, req.Title, req.CurrentWeek, req.Settings)
+	if err != nil {
+		return nil, err
+	}
+	return &api.CycleResponse{Cycle: cycle}, nil
+}
+
+func (h *Handler) PutCycle(ctx context.Context, req *api.PutCurrentCycleRequest, params api.PutCycleParams) (api.PutCycleRes, error) {
+	user, err := h.currentUser(ctx)
+	if err != nil {
+		return &api.PutCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
+	}
+	if _, err := program.Calculate(api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+		return &api.PutCycleBadRequest{Error: errorBody("validation_error", err.Error())}, nil
+	}
+	cycle, ok, err := h.store.SaveCycle(ctx, user.ID, params.CycleId, req.Title, req.CurrentWeek, req.Settings)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.PutCycleNotFound{Error: errorBody("not_found", "cycle not found")}, nil
+	}
+	return &api.CycleResponse{Cycle: cycle}, nil
+}
+
+func (h *Handler) ActivateCycle(ctx context.Context, params api.ActivateCycleParams) (api.ActivateCycleRes, error) {
+	user, err := h.currentUser(ctx)
+	if err != nil {
+		return &api.ActivateCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
+	}
+	cycle, ok, err := h.store.ActivateCycle(ctx, user.ID, params.CycleId)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.ActivateCycleNotFound{Error: errorBody("not_found", "cycle not found")}, nil
+	}
+	return &api.CycleResponse{Cycle: cycle}, nil
 }
 
 func (h *Handler) GetCurrentCycle(ctx context.Context) (api.GetCurrentCycleRes, error) {
@@ -200,6 +289,25 @@ func (h *Handler) AdvanceCurrentCycle(ctx context.Context, req *api.AdvanceCycle
 		return &api.AdvanceCurrentCycleNotFound{Error: errorBody("not_found", "active cycle not found")}, nil
 	}
 	return &api.CycleResponse{Cycle: cycle}, nil
+}
+
+func (h *Handler) GetCurrentCyclePlan(ctx context.Context) (api.GetCurrentCyclePlanRes, error) {
+	user, err := h.currentUser(ctx)
+	if err != nil {
+		return &api.GetCurrentCyclePlanUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
+	}
+	cycle, ok, err := h.store.CurrentCycle(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.GetCurrentCyclePlanNotFound{Error: errorBody("not_found", "active cycle not found")}, nil
+	}
+	plan, err := program.Calculate(api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (h *Handler) ListCurrentCycleProgress(ctx context.Context, params api.ListCurrentCycleProgressParams) (api.ListCurrentCycleProgressRes, error) {
@@ -266,10 +374,93 @@ func (h *Handler) DeleteCurrentCycleCheckpoint(ctx context.Context, params api.D
 	return &api.DeleteCurrentCycleCheckpointNoContent{}, nil
 }
 
+func (h *Handler) ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ListExercisesRes, error) {
+	if _, err := h.currentUser(ctx); err != nil {
+		return unauthorized(), nil
+	}
+	response, err := h.store.ListExercises(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if h.catalog != nil {
+		if err := h.appendAliasExerciseMatches(ctx, params, &response); err != nil {
+			return nil, err
+		}
+	}
+	return &response, nil
+}
+
+func (h *Handler) appendAliasExerciseMatches(ctx context.Context, params api.ListExercisesParams, response *api.ExerciseCatalogListResponse) error {
+	query := params.Query.Or("")
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	limit := response.Limit
+	if limit <= 0 {
+		limit = 30
+	}
+	if len(response.Items) >= limit {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, item := range response.Items {
+		seen[item.DatasetExerciseId] = true
+	}
+	for _, datasetID := range h.catalog.DatasetIDsForQuery(query, limit-len(response.Items)) {
+		if seen[datasetID] {
+			continue
+		}
+		item, ok, err := h.store.CatalogExercise(ctx, datasetID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		if params.HasGif.Or(false) && item.Media.Status != api.ExerciseMediaStatusAvailable {
+			continue
+		}
+		response.Items = append(response.Items, item)
+		response.Total++
+		seen[datasetID] = true
+		if len(response.Items) >= limit {
+			break
+		}
+	}
+	return nil
+}
+
+func (h *Handler) GetCatalogExercise(ctx context.Context, params api.GetCatalogExerciseParams) (api.GetCatalogExerciseRes, error) {
+	if _, err := h.currentUser(ctx); err != nil {
+		return &api.GetCatalogExerciseUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
+	}
+	exercise, ok, err := h.store.CatalogExercise(ctx, params.DatasetExerciseId)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &api.GetCatalogExerciseNotFound{Error: errorBody("not_found", "exercise not found")}, nil
+	}
+	return &api.ExerciseCatalogItemResponse{Exercise: exercise}, nil
+}
+
 func (h *Handler) GetExerciseDetails(ctx context.Context, params api.GetExerciseDetailsParams) (api.GetExerciseDetailsRes, error) {
+	if details, ok, err := h.store.ExerciseDetails(ctx, params.ExerciseKey); err != nil {
+		return nil, err
+	} else if ok {
+		if h.catalog != nil && (details.Media.Status != api.ExerciseMediaStatusAvailable || details.DatasetExerciseId.Or("") == "") {
+			if fallback, ok := h.catalog.Details(params.ExerciseKey); ok && fallback.Media.Status == api.ExerciseMediaStatusAvailable {
+				return &api.ExerciseDetailsResponse{Exercise: fallback}, nil
+			}
+		}
+		return &api.ExerciseDetailsResponse{Exercise: details}, nil
+	}
+	if h.catalog == nil {
+		return &api.GetExerciseDetailsNotFound{Error: errorBody("not_found", "exercise not found")}, nil
+	}
 	details, ok := h.catalog.Details(params.ExerciseKey)
 	if !ok {
-		return &api.ErrorResponse{Error: errorBody("not_found", "exercise not found")}, nil
+		return &api.GetExerciseDetailsNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}
 	return &api.ExerciseDetailsResponse{Exercise: details}, nil
 }
