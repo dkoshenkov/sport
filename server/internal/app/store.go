@@ -25,12 +25,19 @@ type Store interface {
 	RevokeSession(ctx context.Context, tokenHash string) error
 	Profile(ctx context.Context, userID uuid.UUID) (api.AthleteProfile, error)
 	SaveProfile(ctx context.Context, userID uuid.UUID, input api.AthleteProfileInput) (api.AthleteProfile, error)
+	ListCycles(ctx context.Context, userID uuid.UUID) ([]api.ProgramCycle, uuid.UUID, bool, error)
+	CreateCycle(ctx context.Context, userID uuid.UUID, title string, week api.ProgramWeek, settings api.CycleSettings) (api.ProgramCycle, error)
 	CurrentCycle(ctx context.Context, userID uuid.UUID) (api.ProgramCycle, bool, error)
 	SaveCurrentCycle(ctx context.Context, userID uuid.UUID, title string, week api.ProgramWeek, settings api.CycleSettings) (api.ProgramCycle, error)
+	SaveCycle(ctx context.Context, userID, cycleID uuid.UUID, title string, week api.ProgramWeek, settings api.CycleSettings) (api.ProgramCycle, bool, error)
+	ActivateCycle(ctx context.Context, userID, cycleID uuid.UUID) (api.ProgramCycle, bool, error)
 	AdvanceCycle(ctx context.Context, userID uuid.UUID, week api.ProgramWeek) (api.ProgramCycle, bool, error)
 	ListProgress(ctx context.Context, cycleID uuid.UUID, week api.ProgramWeek) ([]api.ProgressCheckpoint, error)
 	UpsertProgress(ctx context.Context, cycleID uuid.UUID, input api.ProgressCheckpointInput) (api.ProgressCheckpoint, error)
 	DeleteProgress(ctx context.Context, cycleID, checkpointID uuid.UUID) (bool, error)
+	ExerciseDetails(ctx context.Context, exerciseKey string) (api.ExerciseDetails, bool, error)
+	ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ExerciseCatalogListResponse, error)
+	CatalogExercise(ctx context.Context, datasetExerciseID string) (api.ExerciseCatalogItem, bool, error)
 }
 
 func defaultProfile(now time.Time) api.AthleteProfile {

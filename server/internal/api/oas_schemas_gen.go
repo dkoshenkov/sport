@@ -47,6 +47,14 @@ func (s *APIError) SetDetails(val []string) {
 	s.Details = val
 }
 
+type ActivateCycleNotFound ErrorResponse
+
+func (*ActivateCycleNotFound) activateCycleRes() {}
+
+type ActivateCycleUnauthorized ErrorResponse
+
+func (*ActivateCycleUnauthorized) activateCycleRes() {}
+
 type AdvanceCurrentCycleBadRequest ErrorResponse
 
 func (*AdvanceCurrentCycleBadRequest) advanceCurrentCycleRes() {}
@@ -391,6 +399,10 @@ func (s *BootstrapResponseHeaders) SetResponse(val BootstrapResponse) {
 	s.Response = val
 }
 
+type CalculateProgramBadRequest ErrorResponse
+
+func (*CalculateProgramBadRequest) calculateProgramRes() {}
+
 // Ref: #/components/schemas/CalculateProgramRequest
 type CalculateProgramRequest struct {
 	Selection ProgramSelection `json:"selection"`
@@ -405,6 +417,10 @@ func (s *CalculateProgramRequest) GetSelection() ProgramSelection {
 func (s *CalculateProgramRequest) SetSelection(val ProgramSelection) {
 	s.Selection = val
 }
+
+type CalculateProgramUnauthorized ErrorResponse
+
+func (*CalculateProgramUnauthorized) calculateProgramRes() {}
 
 // Ref: #/components/schemas/CheckpointCompletedData
 type CheckpointCompletedData struct {
@@ -558,6 +574,14 @@ func (s *CheckpointStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+type CreateCycleBadRequest ErrorResponse
+
+func (*CreateCycleBadRequest) createCycleRes() {}
+
+type CreateCycleUnauthorized ErrorResponse
+
+func (*CreateCycleUnauthorized) createCycleRes() {}
+
 // Ref: #/components/schemas/CycleResponse
 type CycleResponse struct {
 	Cycle ProgramCycle `json:"cycle"`
@@ -573,9 +597,12 @@ func (s *CycleResponse) SetCycle(val ProgramCycle) {
 	s.Cycle = val
 }
 
+func (*CycleResponse) activateCycleRes()       {}
 func (*CycleResponse) advanceCurrentCycleRes() {}
+func (*CycleResponse) createCycleRes()         {}
 func (*CycleResponse) getCurrentCycleRes()     {}
 func (*CycleResponse) putCurrentCycleRes()     {}
+func (*CycleResponse) putCycleRes()            {}
 
 // Ref: #/components/schemas/CycleSettings
 type CycleSettings struct {
@@ -685,6 +712,34 @@ func (s *CycleStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+// Ref: #/components/schemas/CyclesResponse
+type CyclesResponse struct {
+	Cycles         []ProgramCycle `json:"cycles"`
+	CurrentCycleId OptNilUUID     `json:"currentCycleId"`
+}
+
+// GetCycles returns the value of Cycles.
+func (s *CyclesResponse) GetCycles() []ProgramCycle {
+	return s.Cycles
+}
+
+// GetCurrentCycleId returns the value of CurrentCycleId.
+func (s *CyclesResponse) GetCurrentCycleId() OptNilUUID {
+	return s.CurrentCycleId
+}
+
+// SetCycles sets the value of Cycles.
+func (s *CyclesResponse) SetCycles(val []ProgramCycle) {
+	s.Cycles = val
+}
+
+// SetCurrentCycleId sets the value of CurrentCycleId.
+func (s *CyclesResponse) SetCurrentCycleId(val OptNilUUID) {
+	s.CurrentCycleId = val
+}
+
+func (*CyclesResponse) listCyclesRes() {}
+
 // DeleteCurrentCycleCheckpointNoContent is response for DeleteCurrentCycleCheckpoint operation.
 type DeleteCurrentCycleCheckpointNoContent struct{}
 
@@ -713,17 +768,200 @@ func (s *ErrorResponse) SetError(val APIError) {
 	s.Error = val
 }
 
-func (*ErrorResponse) calculateProgramRes()   {}
-func (*ErrorResponse) getExerciseDetailsRes() {}
-func (*ErrorResponse) getMeRes()              {}
-func (*ErrorResponse) getMyProfileRes()       {}
-func (*ErrorResponse) logoutRes()             {}
+func (*ErrorResponse) getMeRes()             {}
+func (*ErrorResponse) getMyProfileRes()      {}
+func (*ErrorResponse) getProgramOptionsRes() {}
+func (*ErrorResponse) listCyclesRes()        {}
+func (*ErrorResponse) listExercisesRes()     {}
+func (*ErrorResponse) logoutRes()            {}
+
+// Ref: #/components/schemas/ExerciseCatalogItem
+type ExerciseCatalogItem struct {
+	DatasetExerciseId string        `json:"datasetExerciseId"`
+	Name              string        `json:"name"`
+	NameRu            OptNilString  `json:"nameRu"`
+	Category          OptNilString  `json:"category"`
+	BodyPart          OptNilString  `json:"bodyPart"`
+	Equipment         OptNilString  `json:"equipment"`
+	TargetMuscles     []string      `json:"targetMuscles"`
+	SecondaryMuscles  []string      `json:"secondaryMuscles"`
+	Instructions      []string      `json:"instructions"`
+	Media             ExerciseMedia `json:"media"`
+}
+
+// GetDatasetExerciseId returns the value of DatasetExerciseId.
+func (s *ExerciseCatalogItem) GetDatasetExerciseId() string {
+	return s.DatasetExerciseId
+}
+
+// GetName returns the value of Name.
+func (s *ExerciseCatalogItem) GetName() string {
+	return s.Name
+}
+
+// GetNameRu returns the value of NameRu.
+func (s *ExerciseCatalogItem) GetNameRu() OptNilString {
+	return s.NameRu
+}
+
+// GetCategory returns the value of Category.
+func (s *ExerciseCatalogItem) GetCategory() OptNilString {
+	return s.Category
+}
+
+// GetBodyPart returns the value of BodyPart.
+func (s *ExerciseCatalogItem) GetBodyPart() OptNilString {
+	return s.BodyPart
+}
+
+// GetEquipment returns the value of Equipment.
+func (s *ExerciseCatalogItem) GetEquipment() OptNilString {
+	return s.Equipment
+}
+
+// GetTargetMuscles returns the value of TargetMuscles.
+func (s *ExerciseCatalogItem) GetTargetMuscles() []string {
+	return s.TargetMuscles
+}
+
+// GetSecondaryMuscles returns the value of SecondaryMuscles.
+func (s *ExerciseCatalogItem) GetSecondaryMuscles() []string {
+	return s.SecondaryMuscles
+}
+
+// GetInstructions returns the value of Instructions.
+func (s *ExerciseCatalogItem) GetInstructions() []string {
+	return s.Instructions
+}
+
+// GetMedia returns the value of Media.
+func (s *ExerciseCatalogItem) GetMedia() ExerciseMedia {
+	return s.Media
+}
+
+// SetDatasetExerciseId sets the value of DatasetExerciseId.
+func (s *ExerciseCatalogItem) SetDatasetExerciseId(val string) {
+	s.DatasetExerciseId = val
+}
+
+// SetName sets the value of Name.
+func (s *ExerciseCatalogItem) SetName(val string) {
+	s.Name = val
+}
+
+// SetNameRu sets the value of NameRu.
+func (s *ExerciseCatalogItem) SetNameRu(val OptNilString) {
+	s.NameRu = val
+}
+
+// SetCategory sets the value of Category.
+func (s *ExerciseCatalogItem) SetCategory(val OptNilString) {
+	s.Category = val
+}
+
+// SetBodyPart sets the value of BodyPart.
+func (s *ExerciseCatalogItem) SetBodyPart(val OptNilString) {
+	s.BodyPart = val
+}
+
+// SetEquipment sets the value of Equipment.
+func (s *ExerciseCatalogItem) SetEquipment(val OptNilString) {
+	s.Equipment = val
+}
+
+// SetTargetMuscles sets the value of TargetMuscles.
+func (s *ExerciseCatalogItem) SetTargetMuscles(val []string) {
+	s.TargetMuscles = val
+}
+
+// SetSecondaryMuscles sets the value of SecondaryMuscles.
+func (s *ExerciseCatalogItem) SetSecondaryMuscles(val []string) {
+	s.SecondaryMuscles = val
+}
+
+// SetInstructions sets the value of Instructions.
+func (s *ExerciseCatalogItem) SetInstructions(val []string) {
+	s.Instructions = val
+}
+
+// SetMedia sets the value of Media.
+func (s *ExerciseCatalogItem) SetMedia(val ExerciseMedia) {
+	s.Media = val
+}
+
+// Ref: #/components/schemas/ExerciseCatalogItemResponse
+type ExerciseCatalogItemResponse struct {
+	Exercise ExerciseCatalogItem `json:"exercise"`
+}
+
+// GetExercise returns the value of Exercise.
+func (s *ExerciseCatalogItemResponse) GetExercise() ExerciseCatalogItem {
+	return s.Exercise
+}
+
+// SetExercise sets the value of Exercise.
+func (s *ExerciseCatalogItemResponse) SetExercise(val ExerciseCatalogItem) {
+	s.Exercise = val
+}
+
+func (*ExerciseCatalogItemResponse) getCatalogExerciseRes() {}
+
+// Ref: #/components/schemas/ExerciseCatalogListResponse
+type ExerciseCatalogListResponse struct {
+	Items  []ExerciseCatalogItem `json:"items"`
+	Total  int                   `json:"total"`
+	Limit  int                   `json:"limit"`
+	Offset int                   `json:"offset"`
+}
+
+// GetItems returns the value of Items.
+func (s *ExerciseCatalogListResponse) GetItems() []ExerciseCatalogItem {
+	return s.Items
+}
+
+// GetTotal returns the value of Total.
+func (s *ExerciseCatalogListResponse) GetTotal() int {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *ExerciseCatalogListResponse) GetLimit() int {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *ExerciseCatalogListResponse) GetOffset() int {
+	return s.Offset
+}
+
+// SetItems sets the value of Items.
+func (s *ExerciseCatalogListResponse) SetItems(val []ExerciseCatalogItem) {
+	s.Items = val
+}
+
+// SetTotal sets the value of Total.
+func (s *ExerciseCatalogListResponse) SetTotal(val int) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *ExerciseCatalogListResponse) SetLimit(val int) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *ExerciseCatalogListResponse) SetOffset(val int) {
+	s.Offset = val
+}
+
+func (*ExerciseCatalogListResponse) listExercisesRes() {}
 
 // Ref: #/components/schemas/ExerciseDetails
 type ExerciseDetails struct {
 	ExerciseKey       string                     `json:"exerciseKey"`
 	Name              string                     `json:"name"`
 	DatasetExerciseId OptNilString               `json:"datasetExerciseId"`
+	DatasetName       OptNilString               `json:"datasetName"`
 	AliasStatus       ExerciseDetailsAliasStatus `json:"aliasStatus"`
 	Equipment         OptNilString               `json:"equipment"`
 	TargetMuscles     []string                   `json:"targetMuscles"`
@@ -745,6 +983,11 @@ func (s *ExerciseDetails) GetName() string {
 // GetDatasetExerciseId returns the value of DatasetExerciseId.
 func (s *ExerciseDetails) GetDatasetExerciseId() OptNilString {
 	return s.DatasetExerciseId
+}
+
+// GetDatasetName returns the value of DatasetName.
+func (s *ExerciseDetails) GetDatasetName() OptNilString {
+	return s.DatasetName
 }
 
 // GetAliasStatus returns the value of AliasStatus.
@@ -790,6 +1033,11 @@ func (s *ExerciseDetails) SetName(val string) {
 // SetDatasetExerciseId sets the value of DatasetExerciseId.
 func (s *ExerciseDetails) SetDatasetExerciseId(val OptNilString) {
 	s.DatasetExerciseId = val
+}
+
+// SetDatasetName sets the value of DatasetName.
+func (s *ExerciseDetails) SetDatasetName(val OptNilString) {
+	s.DatasetName = val
 }
 
 // SetAliasStatus sets the value of AliasStatus.
@@ -889,10 +1137,13 @@ func (*ExerciseDetailsResponse) getExerciseDetailsRes() {}
 
 // Ref: #/components/schemas/ExerciseMedia
 type ExerciseMedia struct {
-	Status ExerciseMediaStatus `json:"status"`
-	GifUrl OptNilURI           `json:"gifUrl"`
-	Width  OptNilInt           `json:"width"`
-	Height OptNilInt           `json:"height"`
+	Status     ExerciseMediaStatus `json:"status"`
+	GifUrl     OptNilURI           `json:"gifUrl"`
+	StorageKey OptNilString        `json:"storageKey"`
+	Provenance OptNilString        `json:"provenance"`
+	Width      OptNilInt           `json:"width"`
+	Height     OptNilInt           `json:"height"`
+	UpdatedAt  OptNilDateTime      `json:"updatedAt"`
 }
 
 // GetStatus returns the value of Status.
@@ -905,6 +1156,16 @@ func (s *ExerciseMedia) GetGifUrl() OptNilURI {
 	return s.GifUrl
 }
 
+// GetStorageKey returns the value of StorageKey.
+func (s *ExerciseMedia) GetStorageKey() OptNilString {
+	return s.StorageKey
+}
+
+// GetProvenance returns the value of Provenance.
+func (s *ExerciseMedia) GetProvenance() OptNilString {
+	return s.Provenance
+}
+
 // GetWidth returns the value of Width.
 func (s *ExerciseMedia) GetWidth() OptNilInt {
 	return s.Width
@@ -913,6 +1174,11 @@ func (s *ExerciseMedia) GetWidth() OptNilInt {
 // GetHeight returns the value of Height.
 func (s *ExerciseMedia) GetHeight() OptNilInt {
 	return s.Height
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *ExerciseMedia) GetUpdatedAt() OptNilDateTime {
+	return s.UpdatedAt
 }
 
 // SetStatus sets the value of Status.
@@ -925,6 +1191,16 @@ func (s *ExerciseMedia) SetGifUrl(val OptNilURI) {
 	s.GifUrl = val
 }
 
+// SetStorageKey sets the value of StorageKey.
+func (s *ExerciseMedia) SetStorageKey(val OptNilString) {
+	s.StorageKey = val
+}
+
+// SetProvenance sets the value of Provenance.
+func (s *ExerciseMedia) SetProvenance(val OptNilString) {
+	s.Provenance = val
+}
+
 // SetWidth sets the value of Width.
 func (s *ExerciseMedia) SetWidth(val OptNilInt) {
 	s.Width = val
@@ -933,6 +1209,11 @@ func (s *ExerciseMedia) SetWidth(val OptNilInt) {
 // SetHeight sets the value of Height.
 func (s *ExerciseMedia) SetHeight(val OptNilInt) {
 	s.Height = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *ExerciseMedia) SetUpdatedAt(val OptNilDateTime) {
+	s.UpdatedAt = val
 }
 
 type ExerciseMediaStatus string
@@ -1116,13 +1397,37 @@ func (s *GPPSelection) SetOverheadPress(val NilString) {
 	s.OverheadPress = val
 }
 
+type GetCatalogExerciseNotFound ErrorResponse
+
+func (*GetCatalogExerciseNotFound) getCatalogExerciseRes() {}
+
+type GetCatalogExerciseUnauthorized ErrorResponse
+
+func (*GetCatalogExerciseUnauthorized) getCatalogExerciseRes() {}
+
 type GetCurrentCycleNotFound ErrorResponse
 
 func (*GetCurrentCycleNotFound) getCurrentCycleRes() {}
 
+type GetCurrentCyclePlanNotFound ErrorResponse
+
+func (*GetCurrentCyclePlanNotFound) getCurrentCyclePlanRes() {}
+
+type GetCurrentCyclePlanUnauthorized ErrorResponse
+
+func (*GetCurrentCyclePlanUnauthorized) getCurrentCyclePlanRes() {}
+
 type GetCurrentCycleUnauthorized ErrorResponse
 
 func (*GetCurrentCycleUnauthorized) getCurrentCycleRes() {}
+
+type GetExerciseDetailsNotFound ErrorResponse
+
+func (*GetExerciseDetailsNotFound) getExerciseDetailsRes() {}
+
+type GetExerciseDetailsUnauthorized ErrorResponse
+
+func (*GetExerciseDetailsUnauthorized) getExerciseDetailsRes() {}
 
 // Ref: #/components/schemas/HealthResponse
 type HealthResponse struct {
@@ -1426,6 +1731,52 @@ func (s *OneRepMaxes) SetSquat(val float64) {
 	s.Squat = val
 }
 
+// NewOptBool returns new OptBool with value set to v.
+func NewOptBool(v bool) OptBool {
+	return OptBool{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptBool is optional bool.
+type OptBool struct {
+	Value bool
+	Set   bool
+}
+
+// IsSet returns true if OptBool was set.
+func (o OptBool) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptBool) Reset() {
+	var v bool
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptBool) SetTo(v bool) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptBool) Get() (v bool, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptCheckpointCompletedData returns new OptCheckpointCompletedData with value set to v.
 func NewOptCheckpointCompletedData(v CheckpointCompletedData) OptCheckpointCompletedData {
 	return OptCheckpointCompletedData{
@@ -1512,6 +1863,52 @@ func (o OptCheckpointPrescriptionSnapshot) Get() (v CheckpointPrescriptionSnapsh
 
 // Or returns value if set, or given parameter if does not.
 func (o OptCheckpointPrescriptionSnapshot) Or(d CheckpointPrescriptionSnapshot) CheckpointPrescriptionSnapshot {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptInt returns new OptInt with value set to v.
+func NewOptInt(v int) OptInt {
+	return OptInt{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt is optional int.
+type OptInt struct {
+	Value int
+	Set   bool
+}
+
+// IsSet returns true if OptInt was set.
+func (o OptInt) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt) Reset() {
+	var v int
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt) SetTo(v int) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt) Get() (v int, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt) Or(d int) int {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -1858,6 +2255,74 @@ func (o OptNilURI) Or(d url.URL) url.URL {
 	return d
 }
 
+// NewOptNilUUID returns new OptNilUUID with value set to v.
+func NewOptNilUUID(v uuid.UUID) OptNilUUID {
+	return OptNilUUID{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilUUID is optional nullable uuid.UUID.
+type OptNilUUID struct {
+	Value uuid.UUID
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilUUID was set.
+func (o OptNilUUID) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilUUID) Reset() {
+	var v uuid.UUID
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilUUID) SetTo(v uuid.UUID) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilUUID) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilUUID) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v uuid.UUID
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilUUID) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilUUID) Get() (v uuid.UUID, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilUUID) Or(d uuid.UUID) uuid.UUID {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptProgramWeek returns new OptProgramWeek with value set to v.
 func NewOptProgramWeek(v ProgramWeek) OptProgramWeek {
 	return OptProgramWeek{
@@ -1944,6 +2409,52 @@ func (o OptString) Get() (v string, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptUser returns new OptUser with value set to v.
+func NewOptUser(v User) OptUser {
+	return OptUser{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptUser is optional User.
+type OptUser struct {
+	Value User
+	Set   bool
+}
+
+// IsSet returns true if OptUser was set.
+func (o OptUser) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptUser) Reset() {
+	var v User
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptUser) SetTo(v User) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptUser) Get() (v User, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptUser) Or(d User) User {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -2220,6 +2731,8 @@ func (s *ProgramOptionsResponse) SetAssistance(val AssistanceOptions) {
 func (s *ProgramOptionsResponse) SetGpp(val GPPOptions) {
 	s.Gpp = val
 }
+
+func (*ProgramOptionsResponse) getProgramOptionsRes() {}
 
 // Ref: #/components/schemas/ProgramSelection
 type ProgramSelection struct {
@@ -2905,6 +3418,18 @@ type PutCurrentCycleUnauthorized ErrorResponse
 
 func (*PutCurrentCycleUnauthorized) putCurrentCycleRes() {}
 
+type PutCycleBadRequest ErrorResponse
+
+func (*PutCycleBadRequest) putCycleRes() {}
+
+type PutCycleNotFound ErrorResponse
+
+func (*PutCycleNotFound) putCycleRes() {}
+
+type PutCycleUnauthorized ErrorResponse
+
+func (*PutCycleUnauthorized) putCycleRes() {}
+
 type PutMyProfileBadRequest ErrorResponse
 
 func (*PutMyProfileBadRequest) putMyProfileRes() {}
@@ -3024,10 +3549,37 @@ func (s *SessionCookie) SetRoles(val []string) {
 	s.Roles = val
 }
 
+// Ref: #/components/schemas/SessionResponse
+type SessionResponse struct {
+	Authenticated bool    `json:"authenticated"`
+	User          OptUser `json:"user"`
+}
+
+// GetAuthenticated returns the value of Authenticated.
+func (s *SessionResponse) GetAuthenticated() bool {
+	return s.Authenticated
+}
+
+// GetUser returns the value of User.
+func (s *SessionResponse) GetUser() OptUser {
+	return s.User
+}
+
+// SetAuthenticated sets the value of Authenticated.
+func (s *SessionResponse) SetAuthenticated(val bool) {
+	s.Authenticated = val
+}
+
+// SetUser sets the value of User.
+func (s *SessionResponse) SetUser(val OptUser) {
+	s.User = val
+}
+
 // Ref: #/components/schemas/TrainingDay
 type TrainingDay struct {
 	ID    TrainingDayID `json:"id"`
 	Label string        `json:"label"`
+	Focus string        `json:"focus"`
 	Rows  []TrainingRow `json:"rows"`
 }
 
@@ -3039,6 +3591,11 @@ func (s *TrainingDay) GetID() TrainingDayID {
 // GetLabel returns the value of Label.
 func (s *TrainingDay) GetLabel() string {
 	return s.Label
+}
+
+// GetFocus returns the value of Focus.
+func (s *TrainingDay) GetFocus() string {
+	return s.Focus
 }
 
 // GetRows returns the value of Rows.
@@ -3054,6 +3611,11 @@ func (s *TrainingDay) SetID(val TrainingDayID) {
 // SetLabel sets the value of Label.
 func (s *TrainingDay) SetLabel(val string) {
 	s.Label = val
+}
+
+// SetFocus sets the value of Focus.
+func (s *TrainingDay) SetFocus(val string) {
+	s.Focus = val
 }
 
 // SetRows sets the value of Rows.
@@ -3157,7 +3719,8 @@ func (s *TrainingPlanResponse) SetWarnings(val []string) {
 	s.Warnings = val
 }
 
-func (*TrainingPlanResponse) calculateProgramRes() {}
+func (*TrainingPlanResponse) calculateProgramRes()    {}
+func (*TrainingPlanResponse) getCurrentCyclePlanRes() {}
 
 // Ref: #/components/schemas/TrainingRow
 type TrainingRow struct {
@@ -3223,6 +3786,7 @@ type TrainingRowKind string
 
 const (
 	TrainingRowKindMain       TrainingRowKind = "main"
+	TrainingRowKindLight      TrainingRowKind = "light"
 	TrainingRowKindAssistance TrainingRowKind = "assistance"
 	TrainingRowKindGpp        TrainingRowKind = "gpp"
 )
@@ -3231,6 +3795,7 @@ const (
 func (TrainingRowKind) AllValues() []TrainingRowKind {
 	return []TrainingRowKind{
 		TrainingRowKindMain,
+		TrainingRowKindLight,
 		TrainingRowKindAssistance,
 		TrainingRowKindGpp,
 	}
@@ -3240,6 +3805,8 @@ func (TrainingRowKind) AllValues() []TrainingRowKind {
 func (s TrainingRowKind) MarshalText() ([]byte, error) {
 	switch s {
 	case TrainingRowKindMain:
+		return []byte(s), nil
+	case TrainingRowKindLight:
 		return []byte(s), nil
 	case TrainingRowKindAssistance:
 		return []byte(s), nil
@@ -3255,6 +3822,9 @@ func (s *TrainingRowKind) UnmarshalText(data []byte) error {
 	switch TrainingRowKind(data) {
 	case TrainingRowKindMain:
 		*s = TrainingRowKindMain
+		return nil
+	case TrainingRowKindLight:
+		*s = TrainingRowKindLight
 		return nil
 	case TrainingRowKindAssistance:
 		*s = TrainingRowKindAssistance

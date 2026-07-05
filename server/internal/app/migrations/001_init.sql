@@ -88,3 +88,50 @@ CREATE TABLE IF NOT EXISTS progress_checkpoints (
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (cycle_id, week, day_id, exercise_key)
 );
+
+CREATE TABLE IF NOT EXISTS exercise_catalog (
+    dataset_exercise_id text PRIMARY KEY,
+    name text NOT NULL,
+    category text NULL,
+    body_part text NULL,
+    equipment text NULL,
+    target text NULL,
+    muscle_group text NULL,
+    secondary_muscles text[] NOT NULL DEFAULT '{}',
+    instructions jsonb NOT NULL DEFAULT '{}'::jsonb,
+    instruction_steps jsonb NOT NULL DEFAULT '{}'::jsonb,
+    image_path text NULL,
+    gif_path text NULL,
+    source_created_at text NULL,
+    imported_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS exercise_aliases (
+    program_exercise_key text PRIMARY KEY,
+    program_name_ru text NOT NULL,
+    dataset_exercise_id text NULL REFERENCES exercise_catalog(dataset_exercise_id) ON DELETE SET NULL,
+    dataset_name text NULL,
+    review_status text NOT NULL,
+    notes text NULL,
+    name_hints text[] NOT NULL DEFAULT '{}',
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS exercise_media (
+    dataset_exercise_id text PRIMARY KEY REFERENCES exercise_catalog(dataset_exercise_id) ON DELETE CASCADE,
+    status text NOT NULL,
+    gif_url text NULL,
+    storage_key text NULL,
+    width integer NULL,
+    height integer NULL,
+    provenance text NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS exercise_translations_ru (
+    dataset_exercise_id text PRIMARY KEY REFERENCES exercise_catalog(dataset_exercise_id) ON DELETE CASCADE,
+    name_ru text NULL,
+    instructions_ru text[] NOT NULL DEFAULT '{}',
+    updated_at timestamptz NOT NULL DEFAULT now()
+);

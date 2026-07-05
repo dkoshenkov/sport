@@ -126,6 +126,21 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/auth/session:
+    get:
+      tags: [auth]
+      operationId: getAuthSession
+      summary: Probe current session without requiring authentication
+      parameters:
+        - $ref: "#/components/parameters/SidCookie"
+      responses:
+        "200":
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+
   /v1/me:
     get:
       tags: [auth]
@@ -189,6 +204,8 @@ paths:
       tags: [program]
       operationId: getProgramOptions
       summary: Get selectable program options
+      security:
+        - SessionCookie: []
       responses:
         "200":
           description: Program options
@@ -196,12 +213,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProgramOptionsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /v1/program/calculate:
     post:
       tags: [program]
       operationId: calculateProgram
       summary: Calculate training days from settings and week
+      security:
+        - SessionCookie: []
       requestBody:
         required: true
         content:
@@ -217,6 +238,100 @@ paths:
                 $ref: "#/components/schemas/TrainingPlanResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/cycles:
+    get:
+      tags: [cycles]
+      operationId: listCycles
+      summary: List user's cycles
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Cycle history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CyclesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [cycles]
+      operationId: createCycle
+      summary: Create a new active cycle
+      description: Creating a cycle archives the user's previous active cycle.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutCurrentCycleRequest"
+      responses:
+        "201":
+          description: Created active cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/cycles/{cycleId}:
+    put:
+      tags: [cycles]
+      operationId: putCycle
+      summary: Update a cycle by id
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CycleIDPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutCurrentCycleRequest"
+      responses:
+        "200":
+          description: Updated cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cycles/{cycleId}/activate:
+    post:
+      tags: [cycles]
+      operationId: activateCycle
+      summary: Make an existing cycle active
+      description: Activating a cycle archives the user's previous active cycle.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CycleIDPath"
+      responses:
+        "200":
+          description: Activated cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /v1/cycles/current:
     get:
@@ -288,6 +403,25 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/cycles/current/plan:
+    get:
+      tags: [cycles]
+      operationId: getCurrentCyclePlan
+      summary: Calculate the current active cycle plan
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Current active cycle training plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingPlanResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /v1/cycles/current/progress:
     get:
       tags: [cycles]
@@ -354,11 +488,56 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/exercises:
+    get:
+      tags: [exercises]
+      operationId: listExercises
+      summary: Search dataset exercise catalog
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ExerciseQuery"
+        - $ref: "#/components/parameters/LimitQuery"
+        - $ref: "#/components/parameters/OffsetQuery"
+        - $ref: "#/components/parameters/HasGifQuery"
+      responses:
+        "200":
+          description: Exercise catalog results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseCatalogListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/exercises/catalog/{datasetExerciseId}:
+    get:
+      tags: [exercises]
+      operationId: getCatalogExercise
+      summary: Get details for a dataset exercise
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetExerciseIDPath"
+      responses:
+        "200":
+          description: Dataset exercise details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseCatalogItemResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /v1/exercises/{exerciseKey}:
     get:
       tags: [exercises]
       operationId: getExerciseDetails
       summary: Get details for a program exercise
+      security:
+        - SessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ExerciseKeyPath"
       responses:
@@ -368,6 +547,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExerciseDetailsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -398,6 +579,19 @@ components:
       required: false
       schema:
         $ref: "#/components/schemas/ProgramWeek"
+    SidCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema:
+        type: string
+    CycleIDPath:
+      name: cycleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     CheckpointIDPath:
       name: checkpointId
       in: path
@@ -412,6 +606,43 @@ components:
       schema:
         type: string
         minLength: 1
+    DatasetExerciseIDPath:
+      name: datasetExerciseId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    ExerciseQuery:
+      name: query
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 100
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 30
+    OffsetQuery:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    HasGifQuery:
+      name: hasGif
+      in: query
+      required: false
+      schema:
+        type: boolean
 
   responses:
     BadRequest:
@@ -507,6 +738,15 @@ components:
       type: object
       required: [user]
       properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    SessionResponse:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated:
+          type: boolean
         user:
           $ref: "#/components/schemas/User"
 
@@ -801,6 +1041,19 @@ components:
         cycle:
           $ref: "#/components/schemas/ProgramCycle"
 
+    CyclesResponse:
+      type: object
+      required: [cycles]
+      properties:
+        cycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgramCycle"
+        currentCycleId:
+          type: string
+          nullable: true
+          format: uuid
+
     ProgramCycle:
       type: object
       required: [id, title, status, currentWeek, settings, progressSummary, createdAt, updatedAt]
@@ -905,7 +1158,7 @@ components:
 
     TrainingDay:
       type: object
-      required: [id, label, rows]
+      required: [id, label, focus, rows]
       properties:
         id:
           type: string
@@ -913,6 +1166,9 @@ components:
         label:
           type: string
           example: День 1
+        focus:
+          type: string
+          example: Тяжелая становая
         rows:
           type: array
           items:
@@ -938,7 +1194,7 @@ components:
 
     TrainingRowKind:
       type: string
-      enum: [main, assistance, gpp]
+      enum: [main, light, assistance, gpp]
 
     Prescription:
       type: object
@@ -1097,6 +1353,66 @@ components:
         exercise:
           $ref: "#/components/schemas/ExerciseDetails"
 
+    ExerciseCatalogListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExerciseCatalogItem"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+
+    ExerciseCatalogItemResponse:
+      type: object
+      required: [exercise]
+      properties:
+        exercise:
+          $ref: "#/components/schemas/ExerciseCatalogItem"
+
+    ExerciseCatalogItem:
+      type: object
+      required: [datasetExerciseId, name, targetMuscles, secondaryMuscles, instructions, media]
+      properties:
+        datasetExerciseId:
+          type: string
+        name:
+          type: string
+        nameRu:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        bodyPart:
+          type: string
+          nullable: true
+        equipment:
+          type: string
+          nullable: true
+        targetMuscles:
+          type: array
+          items:
+            type: string
+        secondaryMuscles:
+          type: array
+          items:
+            type: string
+        instructions:
+          type: array
+          items:
+            type: string
+        media:
+          $ref: "#/components/schemas/ExerciseMedia"
+
     ExerciseDetails:
       type: object
       required: [exerciseKey, name, aliasStatus, media]
@@ -1106,6 +1422,9 @@ components:
         name:
           type: string
         datasetExerciseId:
+          type: string
+          nullable: true
+        datasetName:
           type: string
           nullable: true
         aliasStatus:
@@ -1140,12 +1459,22 @@ components:
           type: string
           nullable: true
           format: uri
+        storageKey:
+          type: string
+          nullable: true
+        provenance:
+          type: string
+          nullable: true
         width:
           type: integer
           nullable: true
         height:
           type: integer
           nullable: true
+        updatedAt:
+          type: string
+          nullable: true
+          format: date-time
 
     ErrorResponse:
       type: object

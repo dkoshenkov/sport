@@ -35,14 +35,24 @@ func findAuthorization(h http.Header, prefix string) (string, bool) {
 
 // operationRolesSessionCookie is a private map storing roles per operation.
 var operationRolesSessionCookie = map[string][]string{
+	ActivateCycleOperation:                []string{},
 	AdvanceCurrentCycleOperation:          []string{},
+	CalculateProgramOperation:             []string{},
+	CreateCycleOperation:                  []string{},
 	DeleteCurrentCycleCheckpointOperation: []string{},
+	GetCatalogExerciseOperation:           []string{},
 	GetCurrentCycleOperation:              []string{},
+	GetCurrentCyclePlanOperation:          []string{},
+	GetExerciseDetailsOperation:           []string{},
 	GetMeOperation:                        []string{},
 	GetMyProfileOperation:                 []string{},
+	GetProgramOptionsOperation:            []string{},
 	ListCurrentCycleProgressOperation:     []string{},
+	ListCyclesOperation:                   []string{},
+	ListExercisesOperation:                []string{},
 	LogoutOperation:                       []string{},
 	PutCurrentCycleOperation:              []string{},
+	PutCycleOperation:                     []string{},
 	PutMyProfileOperation:                 []string{},
 	UpsertCurrentCycleCheckpointOperation: []string{},
 }

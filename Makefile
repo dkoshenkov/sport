@@ -1,8 +1,16 @@
 SERVER_DIR := server
 SPORT_MAIN_DOMAIN ?= example.com
+EXERCISE_DATASET_DIR ?= exercises-dataset
+EXERCISE_MEDIA_SOURCE_DIR ?= exercises-gifs
 EXERCISE_MEDIA_BASE_URL ?= https://media.$(SPORT_MAIN_DOMAIN)
 EXERCISE_MEDIA_MANIFEST ?= exercise-media.json
 S3_PREFIX ?= exercises
+EXERCISE_MEDIA_STORAGE_MODE ?= local
+EXERCISE_MEDIA_LOCAL_DIR ?= ../client/public/exercises
+CLIENT_PORT ?= 38174
+API_PORT ?= 38080
+POSTGRES_PORT ?= 35432
+DOCKER_EXERCISE_MEDIA_BASE_URL ?=
 DOCKER_IMAGE ?= sport-api
 DATABASE_URL ?= postgres://sport:sport@localhost:5432/sport?sslmode=disable
 
@@ -17,9 +25,10 @@ help:
 		'  make server-race       Run Go race tests' \
 		'  make db-up             Start local Postgres only' \
 		'  make db-down           Stop local Postgres' \
-		'  make sync-media        Clone dataset, upload GIFs to S3, write media manifest' \
-		'  make docker-build      Build API Docker image' \
-		'  make docker-up         Start API with Docker Compose' \
+		'  make sync-media        Clone dataset, seed DB, sync GIF media, write media manifest' \
+		'  make docker-sync-media Clone dataset, seed DB, sync GIF media through Docker Compose' \
+		'  make docker-build      Build Docker Compose images' \
+		'  make docker-up         Start full app with Docker Compose' \
 		'  make docker-down       Stop Docker Compose services' \
 		'  make docker-logs       Tail API logs'
 
@@ -53,15 +62,20 @@ db-down:
 
 .PHONY: sync-media
 sync-media:
-	cd $(SERVER_DIR) && SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) EXERCISE_MEDIA_BASE_URL=$(EXERCISE_MEDIA_BASE_URL) S3_PREFIX=$(S3_PREFIX) go run ./cmd/sync-exercise-media --out $(EXERCISE_MEDIA_MANIFEST)
+	cd $(SERVER_DIR) && DATABASE_URL='$(DATABASE_URL)' SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) EXERCISE_DATASET_DIR=../$(EXERCISE_DATASET_DIR) EXERCISE_MEDIA_BASE_URL=$(EXERCISE_MEDIA_BASE_URL) EXERCISE_MEDIA_SOURCE_DIR=../$(EXERCISE_MEDIA_SOURCE_DIR) EXERCISE_MEDIA_SOURCE_BASE_URL=$(EXERCISE_MEDIA_SOURCE_BASE_URL) EXERCISE_MEDIA_STORAGE_MODE=$(EXERCISE_MEDIA_STORAGE_MODE) EXERCISE_MEDIA_LOCAL_DIR=$(EXERCISE_MEDIA_LOCAL_DIR) EXERCISE_MEDIA_MANIFEST=$(EXERCISE_MEDIA_MANIFEST) S3_PREFIX=$(S3_PREFIX) go run ./cmd/sync-exercise-media
+
+.PHONY: docker-sync-media
+docker-sync-media:
+	SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) CLIENT_PORT=$(CLIENT_PORT) POSTGRES_PORT=$(POSTGRES_PORT) docker compose --profile tools build media-sync
+	SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) CLIENT_PORT=$(CLIENT_PORT) POSTGRES_PORT=$(POSTGRES_PORT) EXERCISE_DATASET_DIR=/dataset EXERCISE_MEDIA_BASE_URL=$(DOCKER_EXERCISE_MEDIA_BASE_URL) EXERCISE_MEDIA_SOURCE_DIR=/gifs EXERCISE_MEDIA_SOURCE_BASE_URL=$(EXERCISE_MEDIA_SOURCE_BASE_URL) EXERCISE_MEDIA_STORAGE_MODE=$(EXERCISE_MEDIA_STORAGE_MODE) S3_PREFIX=$(S3_PREFIX) docker compose --profile tools run --rm media-sync --exercise-media-manifest /media/exercises/exercise-media.json
 
 .PHONY: docker-build
 docker-build:
-	docker build -t $(DOCKER_IMAGE) -f $(SERVER_DIR)/Dockerfile $(SERVER_DIR)
+	docker compose build
 
 .PHONY: docker-up
 docker-up:
-	SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) EXERCISE_MEDIA_BASE_URL=$(EXERCISE_MEDIA_BASE_URL) docker compose up --build api
+	SPORT_MAIN_DOMAIN=$(SPORT_MAIN_DOMAIN) CLIENT_PORT=$(CLIENT_PORT) API_PORT=$(API_PORT) POSTGRES_PORT=$(POSTGRES_PORT) docker compose up --build
 
 .PHONY: docker-down
 docker-down:

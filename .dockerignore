@@ -1,0 +1,8 @@
+.git
+.github
+client/dist
+client/node_modules
+client/public/exercises
+exercises-dataset
+exercises-gifs
+server/tmp

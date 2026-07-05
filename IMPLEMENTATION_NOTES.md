@@ -40,9 +40,9 @@
 - Known unconfirmed or limited mappings:
   - `Тяга из ямы`: no exact deficit deadlift entry confirmed.
   - `Становя тяга с паузами`: no exact paused deadlift entry confirmed.
-  - `Приседания с высоким грифом` / `Приседания с низком грифом`: dataset search did not confirm the high-bar vs low-bar distinction.
+  - `Болгарские сплит-приседания`: mapped to `dumbbell single leg split squat` as the closest rear-foot-supported split squat.
   - `Упражнение на пресс`: XLSX is generic and does not name a concrete exercise.
-  - `Рычажная вертикальная тяга`: no exact lever vertical row entry confirmed.
+  - `Рычажная вертикальная тяга`: mapped to `lever front pulldown` as the closest lever-machine vertical pull.
   - Generic `Бицепс` and `Трицепс` are mapped to local/isolation examples from the dataset, but the XLSX does not specify exact movements.
 
 ## MVP persistence and auth boundary

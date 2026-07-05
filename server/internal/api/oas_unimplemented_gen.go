@@ -13,6 +13,15 @@ type UnimplementedHandler struct{}
 
 var _ Handler = UnimplementedHandler{}
 
+// ActivateCycle implements activateCycle operation.
+//
+// Activating a cycle archives the user's previous active cycle.
+//
+// POST /v1/cycles/{cycleId}/activate
+func (UnimplementedHandler) ActivateCycle(ctx context.Context, params ActivateCycleParams) (r ActivateCycleRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // AdvanceCurrentCycle implements advanceCurrentCycle operation.
 //
 // Move the current cycle to another week.
@@ -40,6 +49,15 @@ func (UnimplementedHandler) CalculateProgram(ctx context.Context, req *Calculate
 	return r, ht.ErrNotImplemented
 }
 
+// CreateCycle implements createCycle operation.
+//
+// Creating a cycle archives the user's previous active cycle.
+//
+// POST /v1/cycles
+func (UnimplementedHandler) CreateCycle(ctx context.Context, req *PutCurrentCycleRequest) (r CreateCycleRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // DeleteCurrentCycleCheckpoint implements deleteCurrentCycleCheckpoint operation.
 //
 // Delete one progress checkpoint.
@@ -49,12 +67,39 @@ func (UnimplementedHandler) DeleteCurrentCycleCheckpoint(ctx context.Context, pa
 	return r, ht.ErrNotImplemented
 }
 
+// GetAuthSession implements getAuthSession operation.
+//
+// Probe current session without requiring authentication.
+//
+// GET /v1/auth/session
+func (UnimplementedHandler) GetAuthSession(ctx context.Context, params GetAuthSessionParams) (r *SessionResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetCatalogExercise implements getCatalogExercise operation.
+//
+// Get details for a dataset exercise.
+//
+// GET /v1/exercises/catalog/{datasetExerciseId}
+func (UnimplementedHandler) GetCatalogExercise(ctx context.Context, params GetCatalogExerciseParams) (r GetCatalogExerciseRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetCurrentCycle implements getCurrentCycle operation.
 //
 // Get current active cycle with editable settings.
 //
 // GET /v1/cycles/current
 func (UnimplementedHandler) GetCurrentCycle(ctx context.Context) (r GetCurrentCycleRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetCurrentCyclePlan implements getCurrentCyclePlan operation.
+//
+// Calculate the current active cycle plan.
+//
+// GET /v1/cycles/current/plan
+func (UnimplementedHandler) GetCurrentCyclePlan(ctx context.Context) (r GetCurrentCyclePlanRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -90,7 +135,7 @@ func (UnimplementedHandler) GetMyProfile(ctx context.Context) (r GetMyProfileRes
 // Get selectable program options.
 //
 // GET /v1/program/options
-func (UnimplementedHandler) GetProgramOptions(ctx context.Context) (r *ProgramOptionsResponse, _ error) {
+func (UnimplementedHandler) GetProgramOptions(ctx context.Context) (r GetProgramOptionsRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -109,6 +154,24 @@ func (UnimplementedHandler) Healthz(ctx context.Context) (r *HealthResponse, _ e
 //
 // GET /v1/cycles/current/progress
 func (UnimplementedHandler) ListCurrentCycleProgress(ctx context.Context, params ListCurrentCycleProgressParams) (r ListCurrentCycleProgressRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ListCycles implements listCycles operation.
+//
+// List user's cycles.
+//
+// GET /v1/cycles
+func (UnimplementedHandler) ListCycles(ctx context.Context) (r ListCyclesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ListExercises implements listExercises operation.
+//
+// Search dataset exercise catalog.
+//
+// GET /v1/exercises
+func (UnimplementedHandler) ListExercises(ctx context.Context, params ListExercisesParams) (r ListExercisesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -136,6 +199,15 @@ func (UnimplementedHandler) Logout(ctx context.Context) (r LogoutRes, _ error) {
 //
 // PUT /v1/cycles/current
 func (UnimplementedHandler) PutCurrentCycle(ctx context.Context, req *PutCurrentCycleRequest) (r PutCurrentCycleRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// PutCycle implements putCycle operation.
+//
+// Update a cycle by id.
+//
+// PUT /v1/cycles/{cycleId}
+func (UnimplementedHandler) PutCycle(ctx context.Context, req *PutCurrentCycleRequest, params PutCycleParams) (r PutCycleRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
