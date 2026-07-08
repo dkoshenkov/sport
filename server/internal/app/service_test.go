@@ -34,6 +34,12 @@ func TestRegisterHashesPasswordAndSetsSessionCookie(t *testing.T) {
 	if !ok || !strings.Contains(cookie, "sid=") || !strings.Contains(cookie, "HttpOnly") {
 		t.Fatalf("SetCookie = %q, ok = %v; want sid HttpOnly cookie", cookie, ok)
 	}
+	if !strings.Contains(cookie, "Max-Age=2592000") {
+		t.Fatalf("SetCookie = %q; want Max-Age=2592000", cookie)
+	}
+	if !strings.Contains(cookie, "Expires=") {
+		t.Fatalf("SetCookie = %q; want Expires attribute", cookie)
+	}
 	if store.passwordHash == "password123" {
 		t.Fatal("stored raw password")
 	}
@@ -97,6 +103,27 @@ func TestGetAuthSessionReturnsUserForValidCookie(t *testing.T) {
 	user, ok := session.User.Get()
 	if !ok || user.ID != store.user.ID {
 		t.Fatalf("session user = %#v, %v; want %s", user, ok, store.user.ID)
+	}
+}
+
+func TestLogoutExpiresSessionCookie(t *testing.T) {
+	store := newFakeStore()
+	handler := NewHandler(store, nil)
+
+	res, err := handler.Logout(context.Background())
+	if err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+	body, ok := res.(*api.LogoutNoContent)
+	if !ok {
+		t.Fatalf("Logout() response = %T, want *api.LogoutNoContent", res)
+	}
+	cookie, ok := body.SetCookie.Get()
+	if !ok {
+		t.Fatal("SetCookie is not set")
+	}
+	if !strings.Contains(cookie, "sid=") || !strings.Contains(cookie, "Max-Age=0") {
+		t.Fatalf("SetCookie = %q; want cleared sid cookie", cookie)
 	}
 }
 

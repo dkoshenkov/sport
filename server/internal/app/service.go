@@ -21,7 +21,7 @@ import (
 	"sport/server/internal/program"
 )
 
-const sessionTTL = 30 * 24 * time.Hour
+const sessionTTL = 12 * 30 * 24 * time.Hour
 
 var (
 	errUnauthorized = errors.New("unauthorized")
@@ -78,10 +78,11 @@ func (h *Handler) Register(ctx context.Context, req *api.RegisterRequest) (api.R
 	if err != nil {
 		return nil, err
 	}
-	if err := h.store.CreateSession(ctx, user.ID, hashToken(token), time.Now().Add(sessionTTL)); err != nil {
+	expiresAt := time.Now().Add(sessionTTL)
+	if err := h.store.CreateSession(ctx, user.ID, hashToken(token), expiresAt); err != nil {
 		return nil, err
 	}
-	return authHeaders(user, token), nil
+	return authHeaders(user, token, expiresAt), nil
 }
 
 func (h *Handler) Login(ctx context.Context, req *api.LoginRequest) (api.LoginRes, error) {
@@ -96,10 +97,11 @@ func (h *Handler) Login(ctx context.Context, req *api.LoginRequest) (api.LoginRe
 	if err != nil {
 		return nil, err
 	}
-	if err := h.store.CreateSession(ctx, user.ID, hashToken(token), time.Now().Add(sessionTTL)); err != nil {
+	expiresAt := time.Now().Add(sessionTTL)
+	if err := h.store.CreateSession(ctx, user.ID, hashToken(token), expiresAt); err != nil {
 		return nil, err
 	}
-	return authHeaders(user, token), nil
+	return authHeaders(user, token, expiresAt), nil
 }
 
 func (h *Handler) Logout(ctx context.Context) (api.LogoutRes, error) {
@@ -108,7 +110,7 @@ func (h *Handler) Logout(ctx context.Context) (api.LogoutRes, error) {
 			return nil, err
 		}
 	}
-	return &api.LogoutNoContent{SetCookie: api.NewOptString("sid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")}, nil
+	return &api.LogoutNoContent{SetCookie: api.NewOptString(expiredSessionCookie().String())}, nil
 }
 
 func (h *Handler) GetAuthSession(ctx context.Context, params api.GetAuthSessionParams) (*api.SessionResponse, error) {
@@ -528,10 +530,33 @@ func ErrorHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 	_ = json.NewEncoder(w).Encode(api.ErrorResponse{Error: errorBody(code, message)})
 }
 
-func authHeaders(user api.User, token string) *api.AuthResponseHeaders {
+func authHeaders(user api.User, token string, expiresAt time.Time) *api.AuthResponseHeaders {
 	return &api.AuthResponseHeaders{
-		SetCookie: api.NewOptString("sid=" + token + "; Path=/; HttpOnly; SameSite=Lax"),
+		SetCookie: api.NewOptString(sessionCookie(token, expiresAt).String()),
 		Response:  api.AuthResponse{User: user},
+	}
+}
+
+func sessionCookie(token string, expiresAt time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     "sid",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt,
+		MaxAge:   int(sessionTTL / time.Second),
+	}
+}
+
+func expiredSessionCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     "sid",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
 	}
 }
 
