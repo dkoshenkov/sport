@@ -8,6 +8,18 @@ Go backend generated from `../docs/openapi.yaml` with `ogen`.
 go run github.com/ogen-go/ogen/cmd/ogen@latest --target internal/api --package api --clean ../docs/openapi.yaml
 ```
 
+## Generate Wire Injector
+
+```bash
+go generate ./cmd/api
+```
+
+Or directly:
+
+```bash
+wire gen ./cmd/api
+```
+
 ## Run API
 
 ```bash
