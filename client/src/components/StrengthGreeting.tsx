@@ -1,11 +1,27 @@
+import { useEffect, useState } from 'react'
+import { cn } from '../app/cn'
+
 const strengthMarks = ['💪', '🏋️', '🦾', '🏋️‍♂️', '🏆', '⚡', '🔥']
 
 function isStrongestAthlete(nickname: string) {
-  return nickname === 'KGI' || nickname === 'kgi'
+  return nickname.trim().toLowerCase() === 'kgi'
 }
 
 export function StrengthGreeting({ nickname }: { nickname: string }) {
-  if (!isStrongestAthlete(nickname)) {
+  const isStrongest = isStrongestAthlete(nickname)
+  const [isCelebrating, setIsCelebrating] = useState(false)
+
+  useEffect(() => {
+    setIsCelebrating(false)
+    if (!isStrongest) {
+      return
+    }
+
+    const animationFrame = requestAnimationFrame(() => setIsCelebrating(true))
+    return () => cancelAnimationFrame(animationFrame)
+  }, [isStrongest, nickname])
+
+  if (!isStrongest) {
     return <span className="text-sm font-medium text-slate-700">{nickname}</span>
   }
 
@@ -16,7 +32,7 @@ export function StrengthGreeting({ nickname }: { nickname: string }) {
         {nickname}
       </span>
       <span className="sr-only">самый сильный {nickname}</span>
-      <span className="strength-celebration__burst" aria-hidden="true">
+      <span className={cn('strength-celebration__burst', isCelebrating && 'strength-celebration__burst--active')} aria-hidden="true">
         {strengthMarks.map((mark) => (
           <span key={mark} className="strength-celebration__mark">
             {mark}
