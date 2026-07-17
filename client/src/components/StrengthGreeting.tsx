@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { cn } from '../app/cn'
 
 const strengthMarks = ['💪', '🏋️', '🦾', '🏋️‍♂️', '🏆', '⚡', '🔥']
+const strongestNicknames = new Set(['kgi', 'test'])
 
 function isStrongestAthlete(nickname: string) {
-  return nickname.trim().toLowerCase() === 'kgi'
+  return strongestNicknames.has(nickname.trim().toLowerCase())
 }
 
 export function StrengthGreeting({ nickname }: { nickname: string }) {
