@@ -544,8 +544,8 @@ func sessionCookie(token string, expiresAt time.Time) *http.Cookie {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 		Expires:  expiresAt,
-		MaxAge:   int(sessionTTL / time.Second),
 	}
 }
 
