@@ -53,6 +53,9 @@ select {
   line-height: 1;
   opacity: 0;
   transform: translate(-50%, -50%);
+}
+
+.strength-celebration__burst--active .strength-celebration__mark {
   animation: strength-burst 1.8s ease-out;
 }
 
