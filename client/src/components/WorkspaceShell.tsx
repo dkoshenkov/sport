@@ -2,6 +2,7 @@ import { logout, type AthleteProfile, type ProgramCycle, type ProgramOptions, ty
 import { ExerciseCatalogView } from './ExerciseCatalogView'
 import { MyCyclesView } from './MyCyclesView'
 import { ProgramShell } from './ProgramShell'
+import { StrengthGreeting } from './StrengthGreeting'
 
 type WorkspaceTab = 'program' | 'cycles' | 'catalog'
 
@@ -58,7 +59,7 @@ export function WorkspaceShell({
               <h1 className="mt-1 text-xl font-semibold text-slate-950">Рабочая программа</h1>
             </div>
             <div className="flex items-center justify-between gap-3 lg:justify-end">
-              <span className="text-sm font-medium text-slate-700">{user.nickname}</span>
+              <StrengthGreeting nickname={user.nickname} />
               <button
                 className="h-10 border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
                 type="button"

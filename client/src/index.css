@@ -30,3 +30,99 @@ select {
 :focus {
   scroll-margin-top: 5rem;
 }
+
+.strength-celebration {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+}
+
+.strength-celebration__burst {
+  position: absolute;
+  inset: -1.75rem -2rem;
+  pointer-events: none;
+}
+
+.strength-celebration__mark {
+  --strength-x: 0rem;
+  --strength-y: 0rem;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 0.875rem;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: strength-burst 1.8s ease-out 2;
+}
+
+.strength-celebration__mark:nth-child(1) {
+  --strength-x: -2.5rem;
+  --strength-y: -1.35rem;
+  animation-delay: -0.1s;
+}
+
+.strength-celebration__mark:nth-child(2) {
+  --strength-x: -0.8rem;
+  --strength-y: -2rem;
+  animation-delay: -0.8s;
+}
+
+.strength-celebration__mark:nth-child(3) {
+  --strength-x: 1.25rem;
+  --strength-y: -1.6rem;
+  animation-delay: -1.25s;
+}
+
+.strength-celebration__mark:nth-child(4) {
+  --strength-x: 2.55rem;
+  --strength-y: -0.3rem;
+  animation-delay: -0.45s;
+}
+
+.strength-celebration__mark:nth-child(5) {
+  --strength-x: 2rem;
+  --strength-y: 1.45rem;
+  animation-delay: -1.45s;
+}
+
+.strength-celebration__mark:nth-child(6) {
+  --strength-x: -0.35rem;
+  --strength-y: 1.85rem;
+  animation-delay: -1.05s;
+}
+
+.strength-celebration__mark:nth-child(7) {
+  --strength-x: -2.25rem;
+  --strength-y: 1.2rem;
+  animation-delay: -1.65s;
+}
+
+@keyframes strength-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  60% {
+    opacity: 0.9;
+    transform: translate(calc(-50% + var(--strength-x)), calc(-50% + var(--strength-y))) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--strength-x)), calc(-50% + var(--strength-y))) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strength-celebration__mark {
+    animation: none;
+    opacity: 0.95;
+    transform: translate(calc(-50% + var(--strength-x)), calc(-50% + var(--strength-y)));
+  }
+}
