@@ -3433,9 +3433,9 @@ func (s *ExerciseMedia) encodeFields(e *jx.Encoder) {
 		s.Status.Encode(e)
 	}
 	{
-		if s.GifUrl.Set {
-			e.FieldStart("gifUrl")
-			s.GifUrl.Encode(e)
+		if s.ImageUrl.Set {
+			e.FieldStart("imageUrl")
+			s.ImageUrl.Encode(e)
 		}
 	}
 	{
@@ -3472,7 +3472,7 @@ func (s *ExerciseMedia) encodeFields(e *jx.Encoder) {
 
 var jsonFieldsNameOfExerciseMedia = [7]string{
 	0: "status",
-	1: "gifUrl",
+	1: "imageUrl",
 	2: "storageKey",
 	3: "provenance",
 	4: "width",
@@ -3499,15 +3499,15 @@ func (s *ExerciseMedia) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"status\"")
 			}
-		case "gifUrl":
+		case "imageUrl":
 			if err := func() error {
-				s.GifUrl.Reset()
-				if err := s.GifUrl.Decode(d); err != nil {
+				s.ImageUrl.Reset()
+				if err := s.ImageUrl.Decode(d); err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
-				return errors.Wrap(err, "decode field \"gifUrl\"")
+				return errors.Wrap(err, "decode field \"imageUrl\"")
 			}
 		case "storageKey":
 			if err := func() error {

@@ -1,117 +1,68 @@
 package exercises
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"sport/server/internal/api"
 )
 
-func TestReverseGripBenchResolvesToAvailableMedia(t *testing.T) {
-	manifestPath := filepath.Join(t.TempDir(), "exercise_media.json")
-	manifest := `[
-		{
-			"datasetExerciseId": "2187",
-			"gifUrl": "https://example.com/exercises/2187.gif",
-			"width": 320,
-			"height": 240,
-			"equipment": "barbell",
-			"targetMuscles": ["pectorals"]
-		}
-	]`
-	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
-		t.Fatalf("write media manifest: %v", err)
-	}
-
-	catalog, err := NewCatalog("", manifestPath)
+func TestCatalogReadsExercisesDatasetDirectly(t *testing.T) {
+	catalog, err := NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
 
-	details, ok := catalog.Details("reverse_grip_bench")
-	if !ok {
-		t.Fatal("expected reverse_grip_bench alias")
+	response := catalog.List(api.ListExercisesParams{
+		Query: api.NewOptString("barbell deadlift"),
+	})
+	if response.Total == 0 {
+		t.Fatal("dataset query returned no exercises")
 	}
-	if got := details.DatasetExerciseId.Or(""); got != "2187" {
-		t.Fatalf("dataset id = %q, want 2187", got)
+	if response.Items[0].DatasetExerciseId != "0032" {
+		t.Fatalf("first item id = %q, want 0032", response.Items[0].DatasetExerciseId)
+	}
+	if response.Items[0].Media.Status != api.ExerciseMediaStatusAvailable {
+		t.Fatalf("media status = %q, want available", response.Items[0].Media.Status)
+	}
+	imageURL, ok := response.Items[0].Media.ImageUrl.Get()
+	if !ok || imageURL.String() != "/videos/0032-ila4NZS.gif" {
+		t.Fatalf("image URL = %q, %v; want /videos/0032-ila4NZS.gif", imageURL, ok)
+	}
+}
+
+func TestCatalogResolvesProgramAliasFromDataset(t *testing.T) {
+	catalog, err := NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
+	if err != nil {
+		t.Fatalf("new catalog: %v", err)
+	}
+
+	details, ok := catalog.Details("deadlift")
+	if !ok {
+		t.Fatal("expected deadlift alias")
+	}
+	if got := details.DatasetExerciseId.Or(""); got != "0032" {
+		t.Fatalf("dataset id = %q, want 0032", got)
+	}
+	if got := details.DatasetName.Or(""); got != "barbell deadlift" {
+		t.Fatalf("dataset name = %q, want barbell deadlift", got)
 	}
 	if details.Media.Status != api.ExerciseMediaStatusAvailable {
 		t.Fatalf("media status = %q, want available", details.Media.Status)
 	}
-	gifURL, ok := details.Media.GifUrl.Get()
-	if !ok {
-		t.Fatal("expected gif url")
-	}
-	if got := gifURL.String(); got != "https://example.com/exercises/2187.gif" {
-		t.Fatalf("gif url = %q, want https://example.com/exercises/2187.gif", got)
+	if len(details.Instructions) == 0 {
+		t.Fatal("expected instructions from dataset")
 	}
 }
 
-func TestGoodMorningUsesMediaBaseURLForReviewedAlias(t *testing.T) {
-	catalog, err := NewCatalog("https://example.com", "")
+func TestCatalogMediaFilterUsesDatasetGIFs(t *testing.T) {
+	catalog, err := NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
 
-	details, ok := catalog.Details("good_morning")
-	if !ok {
-		t.Fatal("expected good_morning alias")
-	}
-	if got := details.DatasetExerciseId.Or(""); got != "0044" {
-		t.Fatalf("dataset id = %q, want 0044", got)
-	}
-	if details.Media.Status != api.ExerciseMediaStatusAvailable {
-		t.Fatalf("media status = %q, want available", details.Media.Status)
-	}
-	gifURL, ok := details.Media.GifUrl.Get()
-	if !ok {
-		t.Fatal("expected gif url")
-	}
-	if got := gifURL.String(); got != "https://example.com/exercises/0044.gif" {
-		t.Fatalf("gif url = %q, want https://example.com/exercises/0044.gif", got)
-	}
-}
-
-func TestReviewedAliasesUseMediaBaseURL(t *testing.T) {
-	catalog, err := NewCatalog("https://example.com", "")
-	if err != nil {
-		t.Fatalf("new catalog: %v", err)
-	}
-
-	tests := []struct {
-		key       string
-		datasetID string
-	}{
-		{key: "lever_vertical_row", datasetID: "0579"},
-		{key: "kettlebell_military_press", datasetID: "0553"},
-		{key: "one_arm_military_press", datasetID: "0361"},
-		{key: "bulgarian_split_squat", datasetID: "0410"},
-		{key: "low_bar_squat", datasetID: "1435"},
-		{key: "high_bar_squat", datasetID: "1436"},
-		{key: "zercher_squat", datasetID: "1545"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
-			details, ok := catalog.Details(tt.key)
-			if !ok {
-				t.Fatalf("expected %s alias", tt.key)
-			}
-			if got := details.DatasetExerciseId.Or(""); got != tt.datasetID {
-				t.Fatalf("dataset id = %q, want %s", got, tt.datasetID)
-			}
-			if details.Media.Status != api.ExerciseMediaStatusAvailable {
-				t.Fatalf("media status = %q, want available", details.Media.Status)
-			}
-			gifURL, ok := details.Media.GifUrl.Get()
-			if !ok {
-				t.Fatal("expected gif url")
-			}
-			want := "https://example.com/exercises/" + tt.datasetID + ".gif"
-			if got := gifURL.String(); got != want {
-				t.Fatalf("gif url = %q, want %s", got, want)
-			}
-		})
+	response := catalog.List(api.ListExercisesParams{HasImage: api.NewOptBool(true), Limit: api.NewOptInt(100)})
+	if response.Total != 1324 {
+		t.Fatalf("GIF-backed exercises = %d, want 1324", response.Total)
 	}
 }

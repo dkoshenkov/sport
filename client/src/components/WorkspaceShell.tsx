@@ -98,6 +98,7 @@ export function WorkspaceShell({
               options={options}
               plan={plan}
               onCycleSaved={onCycleSaved}
+              onReloadWorkspace={onReloadWorkspace}
               onRefreshPlan={onRefreshPlan}
             />
           ) : (

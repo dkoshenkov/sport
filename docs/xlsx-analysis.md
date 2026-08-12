@@ -217,7 +217,7 @@ Recommended domain objects:
 - `ProgramSelection`: 1RM values, week, variant, assistance choices, GPP choices.
 - `ProgramCycle`: persisted user cycle with current settings and current week.
 - `TrainingPlan`: calculated day/exercise rows from the current selection.
-- `ExerciseDetails`: dataset metadata and GIF URL for a program-relevant exercise.
+- `ExerciseDetails`: dataset metadata and image URL for a program-relevant exercise.
 - `ProgressCheckpoint`: persisted user progress for a specific day/exercise/set or exercise row.
 
 The backend should store cycle settings and progress checkpoints in a database. The XLSX formulas become deterministic domain calculations, not UI code.

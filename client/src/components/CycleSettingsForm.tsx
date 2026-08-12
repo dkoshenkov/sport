@@ -274,33 +274,33 @@ function ExerciseMiniPreview({ exerciseKey }: { exerciseKey: string }) {
 
   const details = state.status === 'ready' ? state.details : null
   const media = details?.media
-  const hasGif = media?.status === 'available' && Boolean(media.gifUrl)
+  const hasImage = media?.status === 'available' && Boolean(media.imageUrl)
   const title = details?.name ?? 'Упражнение'
   const subtitle = details?.targetMuscles?.length
     ? details.targetMuscles.slice(0, 3).join(', ')
     : details?.equipment ?? 'Данные упражнения'
   const statusText = state.status === 'loading'
-    ? 'Загрузка GIF'
-    : hasGif
-      ? 'GIF подключен'
+    ? 'Загрузка изображения'
+    : hasImage
+      ? 'Изображение подключено'
       : state.status === 'error'
-        ? 'GIF недоступен'
-        : 'GIF не подключен'
+        ? 'Изображение недоступно'
+        : 'Изображение не подключено'
 
   return (
     <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3 border border-slate-200 bg-slate-50 p-2">
       <div className="flex h-20 w-24 items-center justify-center overflow-hidden border border-slate-200 bg-white text-center text-[11px] leading-4 text-slate-500">
-        {hasGif ? (
+        {hasImage ? (
           <img
             alt={title}
             className="h-full w-full object-contain"
             height={media?.height ?? 120}
             loading="lazy"
-            src={media?.gifUrl ?? ''}
+            src={media?.imageUrl ?? ''}
             width={media?.width ?? 160}
           />
         ) : (
-          <span className="px-2">{state.status === 'loading' ? 'Загрузка…' : 'Нет GIF'}</span>
+          <span className="px-2">{state.status === 'loading' ? 'Загрузка…' : 'Нет изображения'}</span>
         )}
       </div>
       <div className="min-w-0 self-center" aria-live="polite">

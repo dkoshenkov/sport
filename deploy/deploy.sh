@@ -57,7 +57,6 @@ chmod 0600 .env.prod
 printf 'POSTGRES_PASSWORD=%s\n' "${POSTGRES_PASSWORD}" > .env.prod
 
 docker compose --env-file .env.prod -f deploy/docker-compose.prod.yml up -d --build postgres api client
-docker compose --env-file .env.prod -f deploy/docker-compose.prod.yml --profile tools run --rm media-sync
 
 if command -v caddy >/dev/null 2>&1; then
     sudo install -d -m 0755 /etc/caddy/conf.d

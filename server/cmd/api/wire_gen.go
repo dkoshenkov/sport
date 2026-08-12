@@ -53,7 +53,7 @@ func initializeApplication(ctx context.Context) (*application, func(), error) {
 // wire.go:
 
 func newCatalog(cfg app.Config) (*exercises.Catalog, error) {
-	return exercises.NewCatalog(cfg.Media.BaseURL, cfg.Media.Manifest)
+	return exercises.NewCatalog(cfg.Exercises.DatasetDir)
 }
 
 var applicationSet = wire.NewSet(app.LoadConfig, newLogger, app.NewPostgresPool, newCatalog, app.NewPostgresStore, wire.Bind(new(app.Store), new(*app.PostgresStore)), app.NewHandler, app.NewSecurity, newHTTPServer, wire.Struct(new(application), "*"))

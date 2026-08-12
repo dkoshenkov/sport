@@ -34,10 +34,8 @@ type Store interface {
 	AdvanceCycle(ctx context.Context, userID uuid.UUID, week api.ProgramWeek) (api.ProgramCycle, bool, error)
 	ListProgress(ctx context.Context, cycleID uuid.UUID, week api.ProgramWeek) ([]api.ProgressCheckpoint, error)
 	UpsertProgress(ctx context.Context, cycleID uuid.UUID, input api.ProgressCheckpointInput) (api.ProgressCheckpoint, error)
+	UpsertProgressAndAdvance(ctx context.Context, userID, cycleID uuid.UUID, input api.ProgressCheckpointInput, requirements []ProgressRequirement) (api.ProgressCheckpoint, error)
 	DeleteProgress(ctx context.Context, cycleID, checkpointID uuid.UUID) (bool, error)
-	ExerciseDetails(ctx context.Context, exerciseKey string) (api.ExerciseDetails, bool, error)
-	ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ExerciseCatalogListResponse, error)
-	CatalogExercise(ctx context.Context, datasetExerciseID string) (api.ExerciseCatalogItem, bool, error)
 }
 
 func defaultProfile(now time.Time) api.AthleteProfile {

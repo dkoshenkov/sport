@@ -153,30 +153,9 @@ Recommended unique key:
 
 This keeps checkpoint updates idempotent for the current MVP.
 
-### exercise_aliases
-
-Mapping between program exercise names and dataset exercise ids.
-
-| Column                 | Type             | Notes                                  |
-|------------------------|------------------|----------------------------------------|
-| `program_exercise_key` | text primary key | Stable app key                         |
-| `program_name_ru`      | text             | Name from XLSX/UI                      |
-| `dataset_exercise_id`  | text nullable    | `null` when no match is confirmed      |
-| `dataset_name`         | text nullable    |                                        |
-| `review_status`        | text             | `confirmed`, `missing`, `needs_review` |
-| `notes`                | text nullable    |                                        |
-
-### exercise_media
-
-Stable media projection for confirmed dataset exercises.
-
-| Column                | Type             | Notes                             |
-|-----------------------|------------------|-----------------------------------|
-| `dataset_exercise_id` | text primary key |                                   |
-| `gif_url`             | text nullable    | Stable URL returned to the client |
-| `width`               | integer nullable | For layout reservation            |
-| `height`              | integer nullable | For layout reservation            |
-| `updated_at`          | timestamptz      |                                   |
+Exercise catalog data is not persisted in PostgreSQL. The API reads the
+versioned `exercises-dataset-main` directory directly and resolves program
+aliases in the Go catalog package.
 
 ## MVP Persistence Rules
 

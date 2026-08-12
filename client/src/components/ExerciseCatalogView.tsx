@@ -18,7 +18,7 @@ type DetailState =
 
 export function ExerciseCatalogView() {
   const [query, setQuery] = useState('')
-  const [hasGif, setHasGif] = useState(false)
+  const [hasImage, setHasImage] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [catalog, setCatalog] = useState<CatalogState>({ status: 'idle', items: [], total: 0 })
   const [detail, setDetail] = useState<DetailState>({ status: 'idle' })
@@ -27,7 +27,7 @@ export function ExerciseCatalogView() {
     let cancelled = false
     const handle = window.setTimeout(() => {
       setCatalog((current) => ({ status: 'loading', items: current.items, total: current.total }))
-      listExercises({ query: query.trim(), hasGif, limit: 40 })
+      listExercises({ query: query.trim(), hasImage, limit: 40 })
         .then((response) => {
           if (cancelled) return
           setCatalog({ status: 'ready', items: response.items, total: response.total })
@@ -48,7 +48,7 @@ export function ExerciseCatalogView() {
       cancelled = true
       window.clearTimeout(handle)
     }
-  }, [query, hasGif])
+  }, [query, hasImage])
 
   useEffect(() => {
     let cancelled = false
@@ -100,16 +100,16 @@ export function ExerciseCatalogView() {
           </label>
           <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
             <input
-              checked={hasGif}
+              checked={hasImage}
               className="size-4 accent-sky-700"
-              name="has-gif"
+              name="has-image"
               type="checkbox"
               onChange={(event) => {
-                setHasGif(event.target.checked)
+                setHasImage(event.target.checked)
                 setSelectedId('')
               }}
             />
-            Только с GIF
+            Только с изображением
           </label>
         </div>
       </div>
@@ -144,7 +144,7 @@ function ExerciseCatalogGrid({ items, selectedId, total, isLoading, onSelect }: 
   if (!items.length && !isLoading) {
     return (
       <div className="grid min-h-48 place-items-center border border-dashed border-slate-300 bg-white p-6 text-center">
-        <p className="text-sm text-slate-600">Ничего не найдено. Измените запрос или отключите фильтр GIF.</p>
+        <p className="text-sm text-slate-600">Ничего не найдено. Измените запрос или отключите фильтр изображений.</p>
       </div>
     )
   }
@@ -158,7 +158,7 @@ function ExerciseCatalogGrid({ items, selectedId, total, isLoading, onSelect }: 
       <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {items.map((exercise) => {
           const title = exercise.nameRu || exercise.name
-          const hasMedia = exercise.media.status === 'available' && Boolean(exercise.media.gifUrl)
+          const hasMedia = exercise.media.status === 'available' && Boolean(exercise.media.imageUrl)
           return (
             <button
               key={exercise.datasetExerciseId}
@@ -176,10 +176,10 @@ function ExerciseCatalogGrid({ items, selectedId, total, isLoading, onSelect }: 
                     className="size-full object-contain"
                     height={exercise.media.height ?? 240}
                     loading="lazy"
-                    src={exercise.media.gifUrl ?? ''}
+                    src={exercise.media.imageUrl ?? ''}
                     width={exercise.media.width ?? 180}
                   />
-                ) : 'Нет GIF'}
+                ) : 'Нет изображения'}
               </span>
               <span className="block min-w-0 p-3">
                 <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-slate-950">{title}</span>
@@ -209,7 +209,7 @@ function Tag({ children }: { children: React.ReactNode }) {
 function ExerciseCatalogDetails({ state }: { state: DetailState }) {
   const exercise = state.status === 'ready' ? state.exercise : null
   const title = exercise ? exercise.nameRu || exercise.name : 'Детали упражнения'
-  const hasMedia = exercise?.media.status === 'available' && Boolean(exercise.media.gifUrl)
+  const hasMedia = exercise?.media.status === 'available' && Boolean(exercise.media.imageUrl)
 
   return (
     <aside className="border border-slate-200 bg-white xl:sticky xl:top-4" aria-labelledby="catalog-detail-title">
@@ -239,11 +239,11 @@ function ExerciseCatalogDetails({ state }: { state: DetailState }) {
                   className="size-full object-contain"
                   height={exercise.media.height ?? 240}
                   loading="lazy"
-                  src={exercise.media.gifUrl ?? ''}
+                  src={exercise.media.imageUrl ?? ''}
                   width={exercise.media.width ?? 320}
                 />
               ) : (
-                <p className="px-4 text-center text-sm text-slate-600">GIF не подключен для этого упражнения.</p>
+                <p className="px-4 text-center text-sm text-slate-600">Изображение не подключено для этого упражнения.</p>
               )}
             </div>
 

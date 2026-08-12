@@ -2271,15 +2271,15 @@ func (c *Client) sendListExercises(ctx context.Context, params ListExercisesPara
 		}
 	}
 	{
-		// Encode "hasGif" parameter.
+		// Encode "hasImage" parameter.
 		cfg := uri.QueryParameterEncodingConfig{
-			Name:    "hasGif",
+			Name:    "hasImage",
 			Style:   uri.QueryStyleForm,
 			Explode: true,
 		}
 
 		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
-			if val, ok := params.HasGif.Get(); ok {
+			if val, ok := params.HasImage.Get(); ok {
 				return e.EncodeValue(conv.BoolToString(val))
 			}
 			return nil

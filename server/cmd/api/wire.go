@@ -13,7 +13,7 @@ import (
 )
 
 func newCatalog(cfg app.Config) (*exercises.Catalog, error) {
-	return exercises.NewCatalog(cfg.Media.BaseURL, cfg.Media.Manifest)
+	return exercises.NewCatalog(cfg.Exercises.DatasetDir)
 }
 
 var applicationSet = wire.NewSet(

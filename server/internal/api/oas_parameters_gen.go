@@ -458,10 +458,10 @@ func decodeListCurrentCycleProgressParams(args [0]string, argsEscaped bool, r *h
 
 // ListExercisesParams is parameters of listExercises operation.
 type ListExercisesParams struct {
-	Query  OptString `json:",omitempty,omitzero"`
-	Limit  OptInt    `json:",omitempty,omitzero"`
-	Offset OptInt    `json:",omitempty,omitzero"`
-	HasGif OptBool   `json:",omitempty,omitzero"`
+	Query    OptString `json:",omitempty,omitzero"`
+	Limit    OptInt    `json:",omitempty,omitzero"`
+	Offset   OptInt    `json:",omitempty,omitzero"`
+	HasImage OptBool   `json:",omitempty,omitzero"`
 }
 
 func unpackListExercisesParams(packed middleware.Parameters) (params ListExercisesParams) {
@@ -494,11 +494,11 @@ func unpackListExercisesParams(packed middleware.Parameters) (params ListExercis
 	}
 	{
 		key := middleware.ParameterKey{
-			Name: "hasGif",
+			Name: "hasImage",
 			In:   "query",
 		}
 		if v, ok := packed[key]; ok {
-			params.HasGif = v.(OptBool)
+			params.HasImage = v.(OptBool)
 		}
 	}
 	return params
@@ -716,17 +716,17 @@ func decodeListExercisesParams(args [0]string, argsEscaped bool, r *http.Request
 			Err:  err,
 		}
 	}
-	// Decode query: hasGif.
+	// Decode query: hasImage.
 	if err := func() error {
 		cfg := uri.QueryParameterDecodingConfig{
-			Name:    "hasGif",
+			Name:    "hasImage",
 			Style:   uri.QueryStyleForm,
 			Explode: true,
 		}
 
 		if err := q.HasParam(cfg); err == nil {
 			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
-				var paramsDotHasGifVal bool
+				var paramsDotHasImageVal bool
 				if err := func() error {
 					val, err := d.DecodeValue()
 					if err != nil {
@@ -738,12 +738,12 @@ func decodeListExercisesParams(args [0]string, argsEscaped bool, r *http.Request
 						return err
 					}
 
-					paramsDotHasGifVal = c
+					paramsDotHasImageVal = c
 					return nil
 				}(); err != nil {
 					return err
 				}
-				params.HasGif.SetTo(paramsDotHasGifVal)
+				params.HasImage.SetTo(paramsDotHasImageVal)
 				return nil
 			}); err != nil {
 				return err
@@ -752,7 +752,7 @@ func decodeListExercisesParams(args [0]string, argsEscaped bool, r *http.Request
 		return nil
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
-			Name: "hasGif",
+			Name: "hasImage",
 			In:   "query",
 			Err:  err,
 		}

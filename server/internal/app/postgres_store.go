@@ -2,11 +2,8 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -460,9 +457,96 @@ func (s *PostgresStore) ListProgress(ctx context.Context, cycleID uuid.UUID, wee
 }
 
 func (s *PostgresStore) UpsertProgress(ctx context.Context, cycleID uuid.UUID, input api.ProgressCheckpointInput) (api.ProgressCheckpoint, error) {
+	checkpoint, err := upsertProgressRow(ctx, s.pool, cycleID, input)
+	if err != nil {
+		return api.ProgressCheckpoint{}, fmt.Errorf("upsert progress: %w", err)
+	}
+	return checkpoint, nil
+}
+
+func (s *PostgresStore) UpsertProgressAndAdvance(ctx context.Context, userID, cycleID uuid.UUID, input api.ProgressCheckpointInput, requirements []ProgressRequirement) (api.ProgressCheckpoint, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return api.ProgressCheckpoint{}, fmt.Errorf("begin upsert progress: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	checkpoint, err := upsertProgressRow(ctx, tx, cycleID, input)
+	if err != nil {
+		return api.ProgressCheckpoint{}, fmt.Errorf("upsert progress: %w", err)
+	}
+
+	var currentWeek api.ProgramWeek
+	if err := tx.QueryRow(ctx, `
+		SELECT current_week
+		FROM program_cycles
+		WHERE user_id = $1 AND id = $2 AND status = 'active'
+		FOR UPDATE
+	`, userID, cycleID).Scan(&currentWeek); err != nil {
+		return api.ProgressCheckpoint{}, fmt.Errorf("lock current cycle: %w", err)
+	}
+
+	if currentWeek == input.Week && len(requirements) > 0 {
+		dayIDs := make([]string, 0, len(requirements))
+		exerciseKeys := make([]string, 0, len(requirements))
+		for _, requirement := range requirements {
+			dayIDs = append(dayIDs, requirement.DayID)
+			exerciseKeys = append(exerciseKeys, requirement.ExerciseKey)
+		}
+
+		var weekDone bool
+		if err := tx.QueryRow(ctx, `
+			SELECT NOT EXISTS (
+				SELECT 1
+				FROM unnest($3::text[], $4::text[]) AS required(day_id, exercise_key)
+				WHERE NOT EXISTS (
+					SELECT 1
+					FROM progress_checkpoints p
+					WHERE p.cycle_id = $1
+					  AND p.week = $2
+					  AND p.day_id = required.day_id
+					  AND p.exercise_key = required.exercise_key
+					  AND p.status = 'done'
+				)
+			)
+		`, cycleID, input.Week, dayIDs, exerciseKeys).Scan(&weekDone); err != nil {
+			return api.ProgressCheckpoint{}, fmt.Errorf("check completed week: %w", err)
+		}
+		if weekDone {
+			if next, ok := nextProgramWeek(input.Week); ok {
+				if _, err := tx.Exec(ctx, `
+					UPDATE program_cycles
+					SET current_week = $3, updated_at = now()
+					WHERE user_id = $1 AND id = $2 AND status = 'active' AND current_week = $4
+				`, userID, cycleID, next, input.Week); err != nil {
+					return api.ProgressCheckpoint{}, fmt.Errorf("advance completed week: %w", err)
+				}
+			} else {
+				if _, err := tx.Exec(ctx, `
+					UPDATE program_cycles
+					SET status = 'completed', completed_at = now(), updated_at = now()
+					WHERE user_id = $1 AND id = $2 AND status = 'active' AND current_week = $3
+				`, userID, cycleID, input.Week); err != nil {
+					return api.ProgressCheckpoint{}, fmt.Errorf("complete cycle: %w", err)
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return api.ProgressCheckpoint{}, fmt.Errorf("commit upsert progress: %w", err)
+	}
+	return checkpoint, nil
+}
+
+type progressRowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func upsertProgressRow(ctx context.Context, querier progressRowQuerier, cycleID uuid.UUID, input api.ProgressCheckpointInput) (api.ProgressCheckpoint, error) {
 	prescribed := input.Prescribed.Or(api.CheckpointPrescriptionSnapshot{})
 	completed := input.Completed.Or(api.CheckpointCompletedData{})
-	checkpoint, err := scanCheckpoint(s.pool.QueryRow(ctx, `
+	checkpoint, err := scanCheckpoint(querier.QueryRow(ctx, `
 		INSERT INTO progress_checkpoints (
 			cycle_id, week, day_id, exercise_key, row_kind, status,
 			prescribed_sets, prescribed_reps, prescribed_weight_kg, prescribed_rpe,
@@ -506,7 +590,7 @@ func (s *PostgresStore) UpsertProgress(ctx context.Context, cycleID uuid.UUID, i
 		optNilTimeValue(input.CompletedAt),
 	))
 	if err != nil {
-		return api.ProgressCheckpoint{}, fmt.Errorf("upsert progress: %w", err)
+		return api.ProgressCheckpoint{}, err
 	}
 	return checkpoint, nil
 }
@@ -520,171 +604,6 @@ func (s *PostgresStore) DeleteProgress(ctx context.Context, cycleID, checkpointI
 		return false, fmt.Errorf("delete progress: %w", err)
 	}
 	return tag.RowsAffected() > 0, nil
-}
-
-func (s *PostgresStore) ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ExerciseCatalogListResponse, error) {
-	limit := 30
-	if value, ok := params.Limit.Get(); ok {
-		limit = value
-	}
-	offset := 0
-	if value, ok := params.Offset.Get(); ok {
-		offset = value
-	}
-
-	args := []any{}
-	where := []string{"TRUE"}
-	if query, ok := params.Query.Get(); ok && strings.TrimSpace(query) != "" {
-		args = append(args, "%"+strings.ToLower(strings.TrimSpace(query))+"%")
-		idx := len(args)
-		where = append(where, fmt.Sprintf(`(
-			lower(c.name) LIKE $%[1]d OR
-			lower(COALESCE(t.name_ru, '')) LIKE $%[1]d OR
-			lower(COALESCE(a.program_name_ru, '')) LIKE $%[1]d OR
-			lower(COALESCE(c.equipment, '')) LIKE $%[1]d OR
-			lower(COALESCE(c.target, '')) LIKE $%[1]d OR
-			lower(array_to_string(COALESCE(c.secondary_muscles, '{}'), ' ')) LIKE $%[1]d
-		)`, idx))
-	}
-	if hasGif, ok := params.HasGif.Get(); ok && hasGif {
-		where = append(where, "m.gif_url IS NOT NULL AND m.gif_url <> ''")
-	}
-	whereSQL := strings.Join(where, " AND ")
-
-	var total int
-	if err := s.pool.QueryRow(ctx, `
-		SELECT count(*)
-		FROM exercise_catalog c
-		LEFT JOIN exercise_media m ON m.dataset_exercise_id = c.dataset_exercise_id
-		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = c.dataset_exercise_id
-		LEFT JOIN exercise_aliases a ON a.dataset_exercise_id = c.dataset_exercise_id
-		WHERE `+whereSQL,
-		args...,
-	).Scan(&total); err != nil {
-		return api.ExerciseCatalogListResponse{}, fmt.Errorf("count exercises: %w", err)
-	}
-
-	limitParam := len(args) + 1
-	offsetParam := len(args) + 2
-	queryArgs := append(append([]any{}, args...), limit, offset)
-	rows, err := s.pool.Query(ctx, catalogExerciseSelect()+`
-		WHERE `+whereSQL+`
-		ORDER BY COALESCE(t.name_ru, c.name), c.name
-		LIMIT $`+fmt.Sprint(limitParam)+` OFFSET $`+fmt.Sprint(offsetParam),
-		queryArgs...,
-	)
-	if err != nil {
-		return api.ExerciseCatalogListResponse{}, fmt.Errorf("list exercises: %w", err)
-	}
-	defer rows.Close()
-
-	items := []api.ExerciseCatalogItem{}
-	for rows.Next() {
-		item, err := scanCatalogExercise(rows)
-		if err != nil {
-			return api.ExerciseCatalogListResponse{}, err
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return api.ExerciseCatalogListResponse{}, fmt.Errorf("iterate exercises: %w", err)
-	}
-	return api.ExerciseCatalogListResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
-}
-
-func (s *PostgresStore) CatalogExercise(ctx context.Context, datasetExerciseID string) (api.ExerciseCatalogItem, bool, error) {
-	item, err := scanCatalogExercise(s.pool.QueryRow(ctx, catalogExerciseSelect()+`
-		WHERE c.dataset_exercise_id = $1
-	`, datasetExerciseID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return api.ExerciseCatalogItem{}, false, nil
-	}
-	if err != nil {
-		return api.ExerciseCatalogItem{}, false, fmt.Errorf("select catalog exercise: %w", err)
-	}
-	return item, true, nil
-}
-
-func (s *PostgresStore) ExerciseDetails(ctx context.Context, exerciseKey string) (api.ExerciseDetails, bool, error) {
-	var details api.ExerciseDetails
-	var datasetID, datasetName, notes, equipment, target pgtype.Text
-	var gifURL, storageKey, provenance pgtype.Text
-	var width, height pgtype.Int4
-	var mediaUpdatedAt pgtype.Timestamptz
-	var secondary []string
-	var instructionSteps []byte
-	var instructionsRU []string
-
-	err := s.pool.QueryRow(ctx, `
-		SELECT
-			a.program_exercise_key,
-			COALESCE(t.name_ru, a.program_name_ru),
-			a.dataset_exercise_id,
-			COALESCE(a.dataset_name, c.name),
-			a.review_status,
-			a.notes,
-			c.equipment,
-			c.target,
-			COALESCE(c.secondary_muscles, '{}'),
-			COALESCE(c.instruction_steps, '{}'::jsonb),
-			COALESCE(t.instructions_ru, '{}'),
-			COALESCE(m.status, 'missing'),
-			m.gif_url,
-			m.storage_key,
-			m.width,
-			m.height,
-			m.provenance,
-			m.updated_at
-		FROM exercise_aliases a
-		LEFT JOIN exercise_catalog c ON c.dataset_exercise_id = a.dataset_exercise_id
-		LEFT JOIN exercise_media m ON m.dataset_exercise_id = a.dataset_exercise_id
-		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = a.dataset_exercise_id
-		WHERE a.program_exercise_key = $1
-	`, exerciseKey).Scan(
-		&details.ExerciseKey,
-		&details.Name,
-		&datasetID,
-		&datasetName,
-		&details.AliasStatus,
-		&notes,
-		&equipment,
-		&target,
-		&secondary,
-		&instructionSteps,
-		&instructionsRU,
-		&details.Media.Status,
-		&gifURL,
-		&storageKey,
-		&width,
-		&height,
-		&provenance,
-		&mediaUpdatedAt,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return api.ExerciseDetails{}, false, nil
-	}
-	if err != nil {
-		return api.ExerciseDetails{}, false, fmt.Errorf("select exercise details: %w", err)
-	}
-
-	details.DatasetExerciseId = textToOptNil(datasetID)
-	details.DatasetName = textToOptNil(datasetName)
-	details.Equipment = textToOptNil(equipment)
-	if target.Valid && target.String != "" {
-		details.TargetMuscles = []string{target.String}
-	} else {
-		details.TargetMuscles = []string{}
-	}
-	details.SecondaryMuscles = append([]string(nil), secondary...)
-	details.Instructions = selectInstructions(instructionSteps, instructionsRU)
-	if len(details.Instructions) == 0 && notes.Valid {
-		details.Instructions = []string{}
-	}
-	if details.Media.Status == "" {
-		details.Media.Status = api.ExerciseMediaStatusMissing
-	}
-	applyMediaFields(&details.Media, gifURL, storageKey, width, height, provenance, mediaUpdatedAt)
-	return details, true, nil
 }
 
 func upsertCycleSettings(ctx context.Context, tx pgx.Tx, cycleID uuid.UUID, settings api.CycleSettings) error {
@@ -732,127 +651,12 @@ func upsertCycleSettings(ctx context.Context, tx pgx.Tx, cycleID uuid.UUID, sett
 	return nil
 }
 
-func catalogExerciseSelect() string {
-	return `
-		SELECT
-			c.dataset_exercise_id,
-			c.name,
-			t.name_ru,
-			c.category,
-			c.body_part,
-			c.equipment,
-			c.target,
-			COALESCE(c.secondary_muscles, '{}'),
-			COALESCE(c.instruction_steps, '{}'::jsonb),
-			COALESCE(t.instructions_ru, '{}'),
-			COALESCE(m.status, 'missing'),
-			m.gif_url,
-			m.storage_key,
-			m.width,
-			m.height,
-			m.provenance,
-			m.updated_at
-		FROM exercise_catalog c
-		LEFT JOIN exercise_media m ON m.dataset_exercise_id = c.dataset_exercise_id
-		LEFT JOIN exercise_translations_ru t ON t.dataset_exercise_id = c.dataset_exercise_id
-		LEFT JOIN exercise_aliases a ON a.dataset_exercise_id = c.dataset_exercise_id
-	`
-}
-
-func scanCatalogExercise(row pgx.Row) (api.ExerciseCatalogItem, error) {
-	var item api.ExerciseCatalogItem
-	var nameRU, category, bodyPart, equipment, target pgtype.Text
-	var gifURL, storageKey, provenance pgtype.Text
-	var width, height pgtype.Int4
-	var mediaUpdatedAt pgtype.Timestamptz
-	var secondary []string
-	var instructionSteps []byte
-	var instructionsRU []string
-
-	if err := row.Scan(
-		&item.DatasetExerciseId,
-		&item.Name,
-		&nameRU,
-		&category,
-		&bodyPart,
-		&equipment,
-		&target,
-		&secondary,
-		&instructionSteps,
-		&instructionsRU,
-		&item.Media.Status,
-		&gifURL,
-		&storageKey,
-		&width,
-		&height,
-		&provenance,
-		&mediaUpdatedAt,
-	); err != nil {
-		return api.ExerciseCatalogItem{}, err
-	}
-	item.NameRu = textToOptNil(nameRU)
-	item.Category = textToOptNil(category)
-	item.BodyPart = textToOptNil(bodyPart)
-	item.Equipment = textToOptNil(equipment)
-	if target.Valid && target.String != "" {
-		item.TargetMuscles = []string{target.String}
-	} else {
-		item.TargetMuscles = []string{}
-	}
-	item.SecondaryMuscles = append([]string(nil), secondary...)
-	item.Instructions = selectInstructions(instructionSteps, instructionsRU)
-	if item.Media.Status == "" {
-		item.Media.Status = api.ExerciseMediaStatusMissing
-	}
-	applyMediaFields(&item.Media, gifURL, storageKey, width, height, provenance, mediaUpdatedAt)
-	return item, nil
-}
-
 func profileQuery() string {
 	return `
 		SELECT deadlift_1rm_kg::float8, bench_1rm_kg::float8, squat_1rm_kg::float8,
 			preferred_variant, preferred_progression_step, notes, created_at, updated_at
 		FROM athlete_profiles
 	`
-}
-
-func selectInstructions(instructionSteps []byte, ruOverride []string) []string {
-	if len(ruOverride) > 0 {
-		return append([]string(nil), ruOverride...)
-	}
-	var byLanguage map[string][]string
-	if len(instructionSteps) != 0 {
-		_ = json.Unmarshal(instructionSteps, &byLanguage)
-	}
-	for _, lang := range []string{"ru", "en"} {
-		if steps := byLanguage[lang]; len(steps) > 0 {
-			return append([]string(nil), steps...)
-		}
-	}
-	for _, steps := range byLanguage {
-		if len(steps) > 0 {
-			return append([]string(nil), steps...)
-		}
-	}
-	return []string{}
-}
-
-func applyMediaFields(media *api.ExerciseMedia, gifURL pgtype.Text, storageKey pgtype.Text, width pgtype.Int4, height pgtype.Int4, provenance pgtype.Text, updatedAt pgtype.Timestamptz) {
-	if gifURL.Valid && gifURL.String != "" {
-		if parsed, err := url.Parse(gifURL.String); err == nil {
-			media.GifUrl = api.NewOptNilURI(*parsed)
-			media.Status = api.ExerciseMediaStatusAvailable
-		}
-	}
-	media.StorageKey = textToOptNil(storageKey)
-	media.Provenance = textToOptNil(provenance)
-	if width.Valid {
-		media.Width = api.NewOptNilInt(int(width.Int32))
-	}
-	if height.Valid {
-		media.Height = api.NewOptNilInt(int(height.Int32))
-	}
-	media.UpdatedAt = timeToOptNil(updatedAt)
 }
 
 func scanProfile(row pgx.Row) (api.AthleteProfile, error) {

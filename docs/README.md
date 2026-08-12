@@ -28,7 +28,7 @@ The service owns:
 - program options exposed to the client;
 - training day calculation from selected 1RM/week/variant/options;
 - exercise details for program-relevant exercises;
-- stable media URLs for exercise GIF previews;
+- stable URLs for exercise dataset image previews;
 - bootstrap metadata for the client session;
 - persisted user cycle settings;
 - persisted training progress checkpoints.

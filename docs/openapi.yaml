@@ -499,7 +499,7 @@ paths:
         - $ref: "#/components/parameters/ExerciseQuery"
         - $ref: "#/components/parameters/LimitQuery"
         - $ref: "#/components/parameters/OffsetQuery"
-        - $ref: "#/components/parameters/HasGifQuery"
+        - $ref: "#/components/parameters/HasImageQuery"
       responses:
         "200":
           description: Exercise catalog results
@@ -637,8 +637,8 @@ components:
         type: integer
         minimum: 0
         default: 0
-    HasGifQuery:
-      name: hasGif
+    HasImageQuery:
+      name: hasImage
       in: query
       required: false
       schema:
@@ -1455,7 +1455,7 @@ components:
         status:
           type: string
           enum: [available, missing]
-        gifUrl:
+        imageUrl:
           type: string
           nullable: true
           format: uri

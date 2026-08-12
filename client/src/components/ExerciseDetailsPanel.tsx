@@ -54,7 +54,7 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
           </div>
         ) : null}
 
-        {!error && details?.media.status === 'available' && details.media.gifUrl ? (
+        {!error && details?.media.status === 'available' && details.media.imageUrl ? (
           <>
             <div className="aspect-video w-full overflow-hidden border border-slate-200 bg-slate-50">
               <img
@@ -62,7 +62,7 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
                 className="size-full object-contain"
                 height={details.media.height ?? 240}
                 loading="lazy"
-                src={details.media.gifUrl}
+                src={details.media.imageUrl}
                 width={details.media.width ?? 320}
               />
             </div>
@@ -73,7 +73,7 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
         {!error && details && details.media.status !== 'available' ? (
           <div className="space-y-3">
             <div className="grid aspect-video place-items-center border border-dashed border-slate-300 bg-slate-50 px-4 text-center">
-              <p className="text-pretty text-sm text-slate-600">GIF не подключен для этого упражнения.</p>
+              <p className="text-pretty text-sm text-slate-600">Изображение не подключено для этого упражнения.</p>
             </div>
             <ExerciseMetadata details={details} />
           </div>

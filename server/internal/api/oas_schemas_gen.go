@@ -1138,7 +1138,7 @@ func (*ExerciseDetailsResponse) getExerciseDetailsRes() {}
 // Ref: #/components/schemas/ExerciseMedia
 type ExerciseMedia struct {
 	Status     ExerciseMediaStatus `json:"status"`
-	GifUrl     OptNilURI           `json:"gifUrl"`
+	ImageUrl   OptNilURI           `json:"imageUrl"`
 	StorageKey OptNilString        `json:"storageKey"`
 	Provenance OptNilString        `json:"provenance"`
 	Width      OptNilInt           `json:"width"`
@@ -1151,9 +1151,9 @@ func (s *ExerciseMedia) GetStatus() ExerciseMediaStatus {
 	return s.Status
 }
 
-// GetGifUrl returns the value of GifUrl.
-func (s *ExerciseMedia) GetGifUrl() OptNilURI {
-	return s.GifUrl
+// GetImageUrl returns the value of ImageUrl.
+func (s *ExerciseMedia) GetImageUrl() OptNilURI {
+	return s.ImageUrl
 }
 
 // GetStorageKey returns the value of StorageKey.
@@ -1186,9 +1186,9 @@ func (s *ExerciseMedia) SetStatus(val ExerciseMediaStatus) {
 	s.Status = val
 }
 
-// SetGifUrl sets the value of GifUrl.
-func (s *ExerciseMedia) SetGifUrl(val OptNilURI) {
-	s.GifUrl = val
+// SetImageUrl sets the value of ImageUrl.
+func (s *ExerciseMedia) SetImageUrl(val OptNilURI) {
+	s.ImageUrl = val
 }
 
 // SetStorageKey sets the value of StorageKey.

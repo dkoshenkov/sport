@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { type ProgramCycle, type ProgramOptions, type TrainingPlan } from '../app/api'
+import { useEffect, useState } from 'react'
+import { getCurrentCycle, listCurrentCycleProgress, upsertCurrentCycleCheckpoint, type ProgressCheckpoint, type ProgramCycle, type ProgramOptions, type TrainingPlan, type TrainingDay, type TrainingRow } from '../app/api'
 import { ExerciseDetailsPanel } from './ExerciseDetailsPanel'
 import { MarkInfo } from './MarkInfo'
 import { RpeInfo } from './RpeInfo'
@@ -12,18 +12,70 @@ type ProgramShellProps = {
   plan: TrainingPlan
   onCycleSaved: (cycle: ProgramCycle) => void
   onRefreshPlan: () => Promise<void>
+  onReloadWorkspace: () => Promise<void>
 }
 
-export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan }: ProgramShellProps) {
+export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan, onReloadWorkspace }: ProgramShellProps) {
   const firstExercise = plan.days[0]?.rows[0]?.exerciseKey ?? 'deadlift'
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(firstExercise)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isRpeInfoOpen, setIsRpeInfoOpen] = useState(false)
   const [isMarkInfoOpen, setIsMarkInfoOpen] = useState(false)
+  const [checkpoints, setCheckpoints] = useState<ProgressCheckpoint[]>([])
+  const [isProgressLoading, setIsProgressLoading] = useState(true)
+  const [progressError, setProgressError] = useState('')
+  const [savingKey, setSavingKey] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setIsProgressLoading(true)
+    setProgressError('')
+    void listCurrentCycleProgress(cycle.currentWeek)
+      .then((items) => {
+        if (!cancelled) setCheckpoints(items)
+      })
+      .catch((error) => {
+        if (!cancelled) setProgressError(error instanceof Error ? error.message : 'Не удалось загрузить чекпоинты.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsProgressLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cycle.currentWeek, cycle.id])
 
   async function saved(cycle: ProgramCycle) {
     onCycleSaved(cycle)
     await onRefreshPlan()
+  }
+
+  async function toggleCheckpoint(day: TrainingDay['id'], row: TrainingRow) {
+    const key = `${day}:${row.exerciseKey}`
+    if (savingKey) return
+    const current = checkpoints.find((checkpoint) => checkpoint.dayId === day && checkpoint.exerciseKey === row.exerciseKey)
+    setSavingKey(key)
+    setProgressError('')
+    try {
+      const checkpoint = await upsertCurrentCycleCheckpoint({
+        week: cycle.currentWeek,
+        dayId: day,
+        exerciseKey: row.exerciseKey,
+        rowKind: row.kind,
+        status: current?.status === 'done' ? 'planned' : 'done',
+      })
+      setCheckpoints((items) => [...items.filter((item) => !(item.dayId === checkpoint.dayId && item.exerciseKey === checkpoint.exerciseKey)), checkpoint])
+      const nextCycle = await getCurrentCycle()
+      if (!nextCycle) {
+        await onReloadWorkspace()
+        return
+      }
+      await onCycleSaved(nextCycle)
+    } catch (error) {
+      setProgressError(error instanceof Error ? error.message : 'Не удалось сохранить чекпоинт.')
+    } finally {
+      setSavingKey('')
+    }
   }
 
   return (
@@ -88,8 +140,18 @@ export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan
           </div>
         ) : null}
 
+        {progressError ? <p className="mb-4 border-l-2 border-red-600 bg-white px-3 py-2 text-sm text-red-800" role="alert">{progressError}</p> : null}
+        {isProgressLoading ? <p className="mb-4 text-sm text-slate-600">Загрузка чекпоинтов…</p> : null}
+
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <TrainingDays days={plan.days} selectedExerciseKey={selectedExerciseKey} onSelectExercise={setSelectedExerciseKey} />
+          <TrainingDays
+            checkpoints={checkpoints}
+            days={plan.days}
+            isSaving={(day, exerciseKey) => savingKey === `${day}:${exerciseKey}`}
+            onSelectExercise={setSelectedExerciseKey}
+            onToggleCheckpoint={toggleCheckpoint}
+            selectedExerciseKey={selectedExerciseKey}
+          />
           <ExerciseDetailsPanel exerciseKey={selectedExerciseKey} />
         </div>
       </main>

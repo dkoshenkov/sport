@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 
 	"sport/server/internal/api"
 	"sport/server/internal/exercises"
+	"sport/server/internal/program"
 )
 
 func TestRegisterHashesPasswordAndSetsSessionCookie(t *testing.T) {
@@ -175,6 +175,80 @@ func TestCreateCycleArchivesPreviousActive(t *testing.T) {
 	}
 }
 
+func TestUpsertCheckpointAdvancesCycleAfterEveryPlanRowIsDone(t *testing.T) {
+	store := newFakeStore()
+	store.user = api.User{ID: uuid.New(), Nickname: "athlete_1", CreatedAt: time.Now()}
+	store.cycles = []api.ProgramCycle{{
+		ID:          uuid.New(),
+		Title:       "Cycle",
+		Status:      api.CycleStatusActive,
+		CurrentWeek: api.ProgramWeekWeek1,
+		Settings:    testCycleSettings(),
+	}}
+	handler := NewHandler(store, nil)
+	plan, err := program.Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, day := range plan.Days {
+		for _, row := range day.Rows {
+			res, err := handler.UpsertCurrentCycleCheckpoint(authContext(store.user.ID), &api.UpsertProgressCheckpointRequest{Checkpoint: api.ProgressCheckpointInput{
+				Week:        api.ProgramWeekWeek1,
+				DayId:       api.ProgressCheckpointInputDayId(day.ID),
+				ExerciseKey: row.ExerciseKey,
+				RowKind:     row.Kind,
+				Status:      api.CheckpointStatusDone,
+			}})
+			if err != nil {
+				t.Fatalf("UpsertCurrentCycleCheckpoint(%s) error = %v", row.ExerciseKey, err)
+			}
+			if _, ok := res.(*api.ProgressCheckpointResponse); !ok {
+				t.Fatalf("response = %T, want *api.ProgressCheckpointResponse", res)
+			}
+		}
+	}
+
+	if got := store.cycles[0].CurrentWeek; got != api.ProgramWeekWeek2 {
+		t.Fatalf("current week = %s, want %s", got, api.ProgramWeekWeek2)
+	}
+}
+
+func TestUpsertCheckpointCompletesCycleAfterWeekEight(t *testing.T) {
+	store := newFakeStore()
+	store.user = api.User{ID: uuid.New(), Nickname: "athlete_1", CreatedAt: time.Now()}
+	store.cycles = []api.ProgramCycle{{
+		ID:          uuid.New(),
+		Title:       "Cycle",
+		Status:      api.CycleStatusActive,
+		CurrentWeek: api.ProgramWeekWeek8,
+		Settings:    testCycleSettings(),
+	}}
+	handler := NewHandler(store, nil)
+	plan, err := program.Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek8})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, day := range plan.Days {
+		for _, row := range day.Rows {
+			if _, err := handler.UpsertCurrentCycleCheckpoint(authContext(store.user.ID), &api.UpsertProgressCheckpointRequest{Checkpoint: api.ProgressCheckpointInput{
+				Week:        api.ProgramWeekWeek8,
+				DayId:       api.ProgressCheckpointInputDayId(day.ID),
+				ExerciseKey: row.ExerciseKey,
+				RowKind:     row.Kind,
+				Status:      api.CheckpointStatusDone,
+			}}); err != nil {
+				t.Fatalf("UpsertCurrentCycleCheckpoint(%s) error = %v", row.ExerciseKey, err)
+			}
+		}
+	}
+
+	if got := store.cycles[0].Status; got != api.CycleStatusCompleted {
+		t.Fatalf("cycle status = %s, want %s", got, api.CycleStatusCompleted)
+	}
+}
+
 func TestActivateCycleArchivesPreviousActive(t *testing.T) {
 	store := newFakeStore()
 	store.user = api.User{ID: uuid.New(), Nickname: "athlete_1", CreatedAt: time.Now()}
@@ -202,21 +276,9 @@ func TestActivateCycleArchivesPreviousActive(t *testing.T) {
 	}
 }
 
-func TestGetExerciseDetailsFallsBackToCatalogMedia(t *testing.T) {
+func TestGetExerciseDetailsReadsCatalog(t *testing.T) {
 	store := newFakeStore()
-	store.exerciseDetails = map[string]api.ExerciseDetails{
-		"reverse_grip_bench": {
-			ExerciseKey: "reverse_grip_bench",
-			Name:        "Жим обратным хватом",
-			AliasStatus: api.ExerciseDetailsAliasStatusNeedsReview,
-			Media:       api.ExerciseMedia{Status: api.ExerciseMediaStatusMissing},
-		},
-	}
-	manifestPath := filepath.Join(t.TempDir(), "exercise_media.json")
-	if err := os.WriteFile(manifestPath, []byte(`[{"datasetExerciseId":"2187","gifUrl":"https://example.com/exercises/2187.gif"}]`), 0o600); err != nil {
-		t.Fatalf("write media manifest: %v", err)
-	}
-	catalog, err := exercises.NewCatalog("", manifestPath)
+	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
@@ -234,30 +296,23 @@ func TestGetExerciseDetailsFallsBackToCatalogMedia(t *testing.T) {
 		t.Fatalf("dataset id = %q, want 2187", got)
 	}
 	if body.Exercise.Media.Status != api.ExerciseMediaStatusAvailable {
-		t.Fatalf("media status = %q, want available", body.Exercise.Media.Status)
+		t.Fatalf("media status = %q, want available for dataset GIF", body.Exercise.Media.Status)
 	}
 }
 
-func TestListExercisesAddsCodeAliasMatches(t *testing.T) {
+func TestListExercisesReadsDatasetAndProgramAliases(t *testing.T) {
 	store := newFakeStore()
 	store.user = api.User{ID: uuid.New(), Nickname: "athlete_1", CreatedAt: time.Now()}
-	store.catalog = []api.ExerciseCatalogItem{
-		{
-			DatasetExerciseId: "2187",
-			Name:              "barbell reverse close-grip bench press",
-			Media:             api.ExerciseMedia{Status: api.ExerciseMediaStatusAvailable},
-		},
-	}
-	catalog, err := exercises.NewCatalog("", "")
+	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
 	handler := NewHandler(store, catalog)
 
 	res, err := handler.ListExercises(authContext(store.user.ID), api.ListExercisesParams{
-		Query:  api.NewOptString("жим обратным хватом"),
-		Limit:  api.NewOptInt(10),
-		HasGif: api.NewOptBool(true),
+		Query:    api.NewOptString("жим узким хватом"),
+		Limit:    api.NewOptInt(10),
+		HasImage: api.NewOptBool(true),
 	})
 	if err != nil {
 		t.Fatalf("ListExercises() error = %v", err)
@@ -266,8 +321,8 @@ func TestListExercisesAddsCodeAliasMatches(t *testing.T) {
 	if !ok {
 		t.Fatalf("ListExercises() response = %T, want *api.ExerciseCatalogListResponse", res)
 	}
-	if len(body.Items) != 1 || body.Items[0].DatasetExerciseId != "2187" {
-		t.Fatalf("items = %#v, want only dataset 2187", body.Items)
+	if len(body.Items) != 1 || body.Items[0].DatasetExerciseId != "0030" {
+		t.Fatalf("items = %#v, want only dataset 0030", body.Items)
 	}
 }
 
@@ -302,8 +357,7 @@ type fakeStore struct {
 	sessionTokenHash string
 	sessions         map[string]uuid.UUID
 	cycles           []api.ProgramCycle
-	catalog          []api.ExerciseCatalogItem
-	exerciseDetails  map[string]api.ExerciseDetails
+	progress         []api.ProgressCheckpoint
 }
 
 func newFakeStore() *fakeStore {
@@ -442,30 +496,57 @@ func (s *fakeStore) ListProgress(ctx context.Context, cycleID uuid.UUID, week ap
 }
 
 func (s *fakeStore) UpsertProgress(ctx context.Context, cycleID uuid.UUID, input api.ProgressCheckpointInput) (api.ProgressCheckpoint, error) {
-	return api.ProgressCheckpoint{}, nil
+	checkpoint := api.ProgressCheckpoint{ID: uuid.New(), Week: input.Week, DayId: api.ProgressCheckpointDayId(input.DayId), ExerciseKey: input.ExerciseKey, RowKind: input.RowKind, Status: input.Status}
+	for i := range s.progress {
+		if s.progress[i].Week == checkpoint.Week && s.progress[i].DayId == checkpoint.DayId && s.progress[i].ExerciseKey == checkpoint.ExerciseKey {
+			s.progress[i] = checkpoint
+			return checkpoint, nil
+		}
+	}
+	s.progress = append(s.progress, checkpoint)
+	return checkpoint, nil
+}
+
+func (s *fakeStore) UpsertProgressAndAdvance(ctx context.Context, userID, cycleID uuid.UUID, input api.ProgressCheckpointInput, requirements []ProgressRequirement) (api.ProgressCheckpoint, error) {
+	checkpoint, err := s.UpsertProgress(ctx, cycleID, input)
+	if err != nil {
+		return api.ProgressCheckpoint{}, err
+	}
+	if !requirementsDone(requirements, s.progress) {
+		return checkpoint, nil
+	}
+	for i := range s.cycles {
+		if s.cycles[i].ID != cycleID {
+			continue
+		}
+		if next, ok := nextProgramWeek(s.cycles[i].CurrentWeek); ok {
+			s.cycles[i].CurrentWeek = next
+		} else {
+			s.cycles[i].Status = api.CycleStatusCompleted
+		}
+		return checkpoint, nil
+	}
+	return checkpoint, nil
 }
 
 func (s *fakeStore) DeleteProgress(ctx context.Context, cycleID, checkpointID uuid.UUID) (bool, error) {
 	return false, nil
 }
 
-func (s *fakeStore) ExerciseDetails(ctx context.Context, exerciseKey string) (api.ExerciseDetails, bool, error) {
-	if s.exerciseDetails != nil {
-		details, ok := s.exerciseDetails[exerciseKey]
-		return details, ok, nil
+func requirementsDone(requirements []ProgressRequirement, checkpoints []api.ProgressCheckpoint) bool {
+	if len(requirements) == 0 {
+		return false
 	}
-	return api.ExerciseDetails{}, false, nil
-}
-
-func (s *fakeStore) ListExercises(ctx context.Context, params api.ListExercisesParams) (api.ExerciseCatalogListResponse, error) {
-	return api.ExerciseCatalogListResponse{Items: append([]api.ExerciseCatalogItem(nil), s.catalog...), Total: len(s.catalog), Limit: 30}, nil
-}
-
-func (s *fakeStore) CatalogExercise(ctx context.Context, datasetExerciseID string) (api.ExerciseCatalogItem, bool, error) {
-	for _, item := range s.catalog {
-		if item.DatasetExerciseId == datasetExerciseID {
-			return item, true, nil
+	done := make(map[string]bool, len(checkpoints))
+	for _, checkpoint := range checkpoints {
+		if checkpoint.Status == api.CheckpointStatusDone {
+			done[checkpointKey(string(checkpoint.DayId), checkpoint.ExerciseKey)] = true
 		}
 	}
-	return api.ExerciseCatalogItem{}, false, nil
+	for _, requirement := range requirements {
+		if !done[checkpointKey(requirement.DayID, requirement.ExerciseKey)] {
+			return false
+		}
+	}
+	return true
 }

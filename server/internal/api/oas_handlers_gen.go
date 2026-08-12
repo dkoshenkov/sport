@@ -3108,9 +3108,9 @@ func (s *Server) handleListExercisesRequest(args [0]string, argsEscaped bool, w 
 					In:   "query",
 				}: params.Offset,
 				{
-					Name: "hasGif",
+					Name: "hasImage",
 					In:   "query",
-				}: params.HasGif,
+				}: params.HasImage,
 			},
 			Raw: r,
 		}

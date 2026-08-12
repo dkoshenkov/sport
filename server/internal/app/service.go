@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -347,7 +346,17 @@ func (h *Handler) UpsertCurrentCycleCheckpoint(ctx context.Context, req *api.Ups
 	if req.Checkpoint.ExerciseKey == "" {
 		return &api.UpsertCurrentCycleCheckpointBadRequest{Error: errorBody("validation_error", "exerciseKey is required")}, nil
 	}
-	checkpoint, err := h.store.UpsertProgress(ctx, cycle.ID, req.Checkpoint)
+	if req.Checkpoint.Week != cycle.CurrentWeek {
+		return &api.UpsertCurrentCycleCheckpointBadRequest{Error: errorBody("validation_error", "checkpoint week must match current cycle week")}, nil
+	}
+	plan, err := program.Calculate(api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
+	if err != nil {
+		return nil, err
+	}
+	if !checkpointBelongsToPlan(plan, req.Checkpoint) {
+		return &api.UpsertCurrentCycleCheckpointBadRequest{Error: errorBody("validation_error", "checkpoint exercise is not part of the current plan")}, nil
+	}
+	checkpoint, err := h.store.UpsertProgressAndAdvance(ctx, user.ID, cycle.ID, req.Checkpoint, progressRequirements(plan))
 	if err != nil {
 		return nil, err
 	}
@@ -380,66 +389,18 @@ func (h *Handler) ListExercises(ctx context.Context, params api.ListExercisesPar
 	if _, err := h.currentUser(ctx); err != nil {
 		return unauthorized(), nil
 	}
-	response, err := h.store.ListExercises(ctx, params)
-	if err != nil {
-		return nil, err
+	if h.catalog == nil {
+		return nil, errors.New("exercise catalog is not configured")
 	}
-	if h.catalog != nil {
-		if err := h.appendAliasExerciseMatches(ctx, params, &response); err != nil {
-			return nil, err
-		}
-	}
+	response := h.catalog.List(params)
 	return &response, nil
-}
-
-func (h *Handler) appendAliasExerciseMatches(ctx context.Context, params api.ListExercisesParams, response *api.ExerciseCatalogListResponse) error {
-	query := params.Query.Or("")
-	if strings.TrimSpace(query) == "" {
-		return nil
-	}
-	limit := response.Limit
-	if limit <= 0 {
-		limit = 30
-	}
-	if len(response.Items) >= limit {
-		return nil
-	}
-	seen := map[string]bool{}
-	for _, item := range response.Items {
-		seen[item.DatasetExerciseId] = true
-	}
-	for _, datasetID := range h.catalog.DatasetIDsForQuery(query, limit-len(response.Items)) {
-		if seen[datasetID] {
-			continue
-		}
-		item, ok, err := h.store.CatalogExercise(ctx, datasetID)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
-		if params.HasGif.Or(false) && item.Media.Status != api.ExerciseMediaStatusAvailable {
-			continue
-		}
-		response.Items = append(response.Items, item)
-		response.Total++
-		seen[datasetID] = true
-		if len(response.Items) >= limit {
-			break
-		}
-	}
-	return nil
 }
 
 func (h *Handler) GetCatalogExercise(ctx context.Context, params api.GetCatalogExerciseParams) (api.GetCatalogExerciseRes, error) {
 	if _, err := h.currentUser(ctx); err != nil {
 		return &api.GetCatalogExerciseUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
 	}
-	exercise, ok, err := h.store.CatalogExercise(ctx, params.DatasetExerciseId)
-	if err != nil {
-		return nil, err
-	}
+	exercise, ok := h.catalog.CatalogExercise(params.DatasetExerciseId)
 	if !ok {
 		return &api.GetCatalogExerciseNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}
@@ -447,16 +408,6 @@ func (h *Handler) GetCatalogExercise(ctx context.Context, params api.GetCatalogE
 }
 
 func (h *Handler) GetExerciseDetails(ctx context.Context, params api.GetExerciseDetailsParams) (api.GetExerciseDetailsRes, error) {
-	if details, ok, err := h.store.ExerciseDetails(ctx, params.ExerciseKey); err != nil {
-		return nil, err
-	} else if ok {
-		if h.catalog != nil && (details.Media.Status != api.ExerciseMediaStatusAvailable || details.DatasetExerciseId.Or("") == "") {
-			if fallback, ok := h.catalog.Details(params.ExerciseKey); ok && fallback.Media.Status == api.ExerciseMediaStatusAvailable {
-				return &api.ExerciseDetailsResponse{Exercise: fallback}, nil
-			}
-		}
-		return &api.ExerciseDetailsResponse{Exercise: details}, nil
-	}
 	if h.catalog == nil {
 		return &api.GetExerciseDetailsNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}

@@ -2,11 +2,10 @@ package exercises
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -31,43 +30,110 @@ type Alias struct {
 	NameHints   []string    `json:"nameHints,omitempty"`
 }
 
-type Media struct {
-	DatasetID        string   `json:"datasetExerciseId"`
-	GIFURL           string   `json:"gifUrl"`
-	StorageKey       string   `json:"storageKey,omitempty"`
-	Width            int      `json:"width,omitempty"`
-	Height           int      `json:"height,omitempty"`
-	Provenance       string   `json:"provenance,omitempty"`
-	Equipment        string   `json:"equipment,omitempty"`
-	TargetMuscles    []string `json:"targetMuscles,omitempty"`
-	SecondaryMuscles []string `json:"secondaryMuscles,omitempty"`
-	Instructions     []string `json:"instructions,omitempty"`
-	UpdatedAt        string   `json:"updatedAt,omitempty"`
+type datasetExercise struct {
+	ID               string              `json:"id"`
+	Name             string              `json:"name"`
+	Category         string              `json:"category"`
+	BodyPart         string              `json:"body_part"`
+	Equipment        string              `json:"equipment"`
+	Target           string              `json:"target"`
+	SecondaryMuscles []string            `json:"secondary_muscles"`
+	InstructionSteps map[string][]string `json:"instruction_steps"`
+	GIFURL           string              `json:"gif_url"`
 }
 
 type Catalog struct {
-	aliases     map[string]Alias
-	media       map[string]Media
-	mediaBase   string
-	mediaPrefix string
+	aliases      map[string]Alias
+	byDatasetID  map[string]datasetExercise
+	exercises    []datasetExercise
+	datasetDir   string
+	mediaBaseURL string
 }
 
-func NewCatalog(mediaBaseURL, mediaManifestPath string) (*Catalog, error) {
+func NewCatalog(datasetDir string) (*Catalog, error) {
+	data, err := os.ReadFile(filepath.Join(datasetDir, "data", "exercises.json"))
+	if err != nil {
+		return nil, fmt.Errorf("read exercise dataset: %w", err)
+	}
+
+	var list []datasetExercise
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("decode exercise dataset: %w", err)
+	}
+
 	c := &Catalog{
-		aliases:     map[string]Alias{},
-		media:       map[string]Media{},
-		mediaBase:   strings.TrimRight(mediaBaseURL, "/"),
-		mediaPrefix: "exercises",
+		aliases:      make(map[string]Alias),
+		byDatasetID:  make(map[string]datasetExercise, len(list)),
+		exercises:    make([]datasetExercise, 0, len(list)),
+		datasetDir:   datasetDir,
+		mediaBaseURL: "/videos",
+	}
+	for _, item := range list {
+		if item.ID == "" {
+			return nil, fmt.Errorf("exercise dataset contains an item without id")
+		}
+		if _, exists := c.byDatasetID[item.ID]; exists {
+			return nil, fmt.Errorf("exercise dataset contains duplicate id %q", item.ID)
+		}
+		c.byDatasetID[item.ID] = item
+		c.exercises = append(c.exercises, item)
 	}
 	for _, alias := range Aliases() {
 		c.aliases[alias.ProgramKey] = alias
 	}
-	if mediaManifestPath != "" {
-		if err := c.loadMediaManifest(mediaManifestPath); err != nil {
-			return nil, err
-		}
-	}
 	return c, nil
+}
+
+func (c *Catalog) List(params api.ListExercisesParams) api.ExerciseCatalogListResponse {
+	items := make([]datasetExercise, 0, len(c.exercises))
+	query := strings.ToLower(strings.TrimSpace(params.Query.Or("")))
+	for _, item := range c.exercises {
+		if query != "" && !c.matchesQuery(item, query) {
+			continue
+		}
+		if params.HasImage.Or(false) && !c.hasMedia(item) {
+			continue
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := strings.ToLower(items[i].Name)
+		right := strings.ToLower(items[j].Name)
+		if left == right {
+			return items[i].ID < items[j].ID
+		}
+		return left < right
+	})
+
+	limit := params.Limit.Or(30)
+	offset := params.Offset.Or(0)
+	if limit <= 0 {
+		limit = 30
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	total := len(items)
+	if offset >= total {
+		return api.ExerciseCatalogListResponse{Items: []api.ExerciseCatalogItem{}, Total: total, Limit: limit, Offset: offset}
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	result := make([]api.ExerciseCatalogItem, 0, end-offset)
+	for _, item := range items[offset:end] {
+		result = append(result, c.catalogItem(item))
+	}
+	return api.ExerciseCatalogListResponse{Items: result, Total: total, Limit: limit, Offset: offset}
+}
+
+func (c *Catalog) CatalogExercise(datasetID string) (api.ExerciseCatalogItem, bool) {
+	item, ok := c.byDatasetID[datasetID]
+	if !ok {
+		return api.ExerciseCatalogItem{}, false
+	}
+	return c.catalogItem(item), true
 }
 
 func (c *Catalog) Details(exerciseKey string) (api.ExerciseDetails, bool) {
@@ -83,123 +149,140 @@ func (c *Catalog) Details(exerciseKey string) (api.ExerciseDetails, bool) {
 		TargetMuscles:    []string{},
 		SecondaryMuscles: []string{},
 		Instructions:     []string{},
-		Media: api.ExerciseMedia{
-			Status: api.ExerciseMediaStatusMissing,
-		},
+		Media:            api.ExerciseMedia{Status: api.ExerciseMediaStatusMissing},
 	}
-	if alias.DatasetID != "" {
-		details.DatasetExerciseId = api.NewOptNilString(alias.DatasetID)
-	}
-	if alias.DatasetName != "" {
-		details.DatasetName = api.NewOptNilString(alias.DatasetName)
-	}
-
-	if media, ok := c.media[alias.DatasetID]; ok {
-		applyMedia(&details, media)
+	item, ok := c.resolveAlias(alias)
+	if !ok {
 		return details, true
 	}
-	if alias.DatasetID != "" && c.mediaBase != "" {
-		gifURL, err := url.Parse(c.mediaBase + "/" + path.Join(c.mediaPrefix, alias.DatasetID+".gif"))
-		if err == nil {
-			details.Media = api.ExerciseMedia{
-				Status: api.ExerciseMediaStatusAvailable,
-				GifUrl: api.NewOptNilURI(*gifURL),
-			}
-		}
-	}
+	details.DatasetExerciseId = api.NewOptNilString(item.ID)
+	details.DatasetName = api.NewOptNilString(item.Name)
+	details.Equipment = api.NewOptNilString(item.Equipment)
+	details.TargetMuscles = nonEmpty([]string{item.Target})
+	details.SecondaryMuscles = append([]string(nil), item.SecondaryMuscles...)
+	details.Instructions = preferredInstructions(item)
+	details.Media = c.media(item)
 	return details, true
 }
 
-func (c *Catalog) DatasetIDsForQuery(query string, limit int) []string {
-	needle := strings.ToLower(strings.TrimSpace(query))
-	if needle == "" {
-		return nil
-	}
-	if limit <= 0 {
-		limit = 10
-	}
-
-	seen := map[string]bool{}
-	ids := []string{}
-	for _, alias := range Aliases() {
-		if alias.DatasetID == "" || seen[alias.DatasetID] {
-			continue
-		}
-		if aliasMatchesQuery(alias, needle) {
-			seen[alias.DatasetID] = true
-			ids = append(ids, alias.DatasetID)
-			if len(ids) >= limit {
-				return ids
-			}
+func (c *Catalog) matchesQuery(item datasetExercise, query string) bool {
+	values := []string{item.ID, item.Name, item.Category, item.BodyPart, item.Equipment, item.Target}
+	values = append(values, item.SecondaryMuscles...)
+	for _, alias := range c.aliases {
+		resolved, ok := c.resolveAlias(alias)
+		if ok && resolved.ID == item.ID {
+			values = append(values, alias.ProgramKey, alias.ProgramName)
+			values = append(values, alias.NameHints...)
 		}
 	}
-	return ids
-}
-
-func (c *Catalog) loadMediaManifest(file string) error {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("read exercise media manifest: %w", err)
-	}
-	var items []Media
-	if err := json.Unmarshal(data, &items); err != nil {
-		return fmt.Errorf("decode exercise media manifest: %w", err)
-	}
-	for _, item := range items {
-		if item.DatasetID == "" {
-			return errors.New("exercise media manifest contains item without datasetExerciseId")
-		}
-		c.media[item.DatasetID] = item
-	}
-	return nil
-}
-
-func aliasMatchesQuery(alias Alias, needle string) bool {
-	values := []string{
-		alias.ProgramKey,
-		alias.ProgramName,
-		alias.DatasetID,
-		alias.DatasetName,
-	}
-	values = append(values, alias.NameHints...)
 	for _, value := range values {
-		if strings.Contains(strings.ToLower(value), needle) {
+		if strings.Contains(strings.ToLower(value), query) {
 			return true
 		}
 	}
 	return false
 }
 
-func applyMedia(details *api.ExerciseDetails, media Media) {
-	if media.Equipment != "" {
-		details.Equipment = api.NewOptNilString(media.Equipment)
+func (c *Catalog) catalogItem(item datasetExercise) api.ExerciseCatalogItem {
+	result := api.ExerciseCatalogItem{
+		DatasetExerciseId: item.ID,
+		Name:              item.Name,
+		Category:          api.NewOptNilString(item.Category),
+		BodyPart:          api.NewOptNilString(item.BodyPart),
+		Equipment:         api.NewOptNilString(item.Equipment),
+		TargetMuscles:     nonEmpty([]string{item.Target}),
+		SecondaryMuscles:  append([]string(nil), item.SecondaryMuscles...),
+		Instructions:      preferredInstructions(item),
+		Media:             c.media(item),
 	}
-	details.TargetMuscles = append([]string(nil), media.TargetMuscles...)
-	details.SecondaryMuscles = append([]string(nil), media.SecondaryMuscles...)
-	details.Instructions = append([]string(nil), media.Instructions...)
-	if media.GIFURL == "" {
-		return
+	for _, alias := range c.aliases {
+		resolved, ok := c.resolveAlias(alias)
+		if ok && resolved.ID == item.ID {
+			result.NameRu = api.NewOptNilString(alias.ProgramName)
+			break
+		}
 	}
-	gifURL, err := url.Parse(media.GIFURL)
+	return result
+}
+
+func (c *Catalog) media(item datasetExercise) api.ExerciseMedia {
+	media := api.ExerciseMedia{Status: api.ExerciseMediaStatusMissing}
+	if !c.hasMedia(item) {
+		return media
+	}
+	imageURL, err := url.Parse(c.mediaBaseURL + "/" + filepath.Base(item.GIFURL))
 	if err != nil {
-		return
+		return media
 	}
-	details.Media = api.ExerciseMedia{
-		Status: api.ExerciseMediaStatusAvailable,
-		GifUrl: api.NewOptNilURI(*gifURL),
+	media.Status = api.ExerciseMediaStatusAvailable
+	media.ImageUrl = api.NewOptNilURI(*imageURL)
+	media.Provenance = api.NewOptNilString("exercises-dataset-main")
+	return media
+}
+
+func (c *Catalog) hasMedia(item datasetExercise) bool {
+	if item.GIFURL == "" {
+		return false
 	}
-	if media.StorageKey != "" {
-		details.Media.StorageKey = api.NewOptNilString(media.StorageKey)
+	path := filepath.Clean(item.GIFURL)
+	if filepath.IsAbs(path) || path == "." || strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return false
 	}
-	if media.Provenance != "" {
-		details.Media.Provenance = api.NewOptNilString(media.Provenance)
+	info, err := os.Stat(filepath.Join(c.datasetDir, path))
+	return err == nil && !info.IsDir()
+}
+
+func (c *Catalog) resolveAlias(alias Alias) (datasetExercise, bool) {
+	if alias.DatasetID != "" {
+		item, ok := c.byDatasetID[alias.DatasetID]
+		return item, ok
 	}
-	if media.Width > 0 {
-		details.Media.Width = api.NewOptNilInt(media.Width)
+	if alias.Status == StatusMissing {
+		return datasetExercise{}, false
 	}
-	if media.Height > 0 {
-		details.Media.Height = api.NewOptNilInt(media.Height)
+	hints := normalizedSet(alias.NameHints)
+	for _, item := range c.exercises {
+		if _, ok := hints[normalize(item.Name)]; ok {
+			return item, true
+		}
 	}
+	return datasetExercise{}, false
+}
+
+func preferredInstructions(exercise datasetExercise) []string {
+	for _, lang := range []string{"ru", "en"} {
+		if steps := exercise.InstructionSteps[lang]; len(steps) > 0 {
+			return append([]string(nil), steps...)
+		}
+	}
+	for _, steps := range exercise.InstructionSteps {
+		if len(steps) > 0 {
+			return append([]string(nil), steps...)
+		}
+	}
+	return []string{}
+}
+
+func nonEmpty(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func normalizedSet(values []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		result[normalize(value)] = struct{}{}
+	}
+	return result
+}
+
+func normalize(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.ReplaceAll(value, "-", " "))), " ")
 }
 
 func Aliases() []Alias {
@@ -213,7 +296,7 @@ func Aliases() []Alias {
 		{ProgramKey: "romanian_deadlift", ProgramName: "Румынская тяга", DatasetID: "0085", DatasetName: "barbell romanian deadlift", Status: StatusNeedsReview, NameHints: []string{"barbell romanian deadlift", "romanian deadlift"}},
 		{ProgramKey: "deficit_deadlift", ProgramName: "Тяга из ямы", Status: StatusNeedsReview, NameHints: []string{"deficit deadlift"}},
 		{ProgramKey: "sumo_deadlift", ProgramName: "Становая тяга сумо", Status: StatusNeedsReview, NameHints: []string{"sumo deadlift"}},
-		{ProgramKey: "paused_deadlift", ProgramName: "Становая тяга с паузами", Status: StatusMissing, Notes: "No confirmed exact dataset match."},
+		{ProgramKey: "paused_deadlift", ProgramName: "Становая тяга с паузами", Status: StatusMissing},
 
 		{ProgramKey: "close_grip_bench", ProgramName: "Жим узким хватом", DatasetID: "0030", DatasetName: "barbell close-grip bench press", Status: StatusNeedsReview, NameHints: []string{"barbell close-grip bench press", "close-grip bench press", "close grip bench press"}},
 		{ProgramKey: "reverse_grip_bench", ProgramName: "Жим обратным хватом", DatasetID: "2187", DatasetName: "barbell reverse close-grip bench press", Status: StatusNeedsReview, NameHints: []string{"barbell reverse close-grip bench press", "reverse grip bench press"}},
@@ -227,8 +310,8 @@ func Aliases() []Alias {
 		{ProgramKey: "low_bar_squat", ProgramName: "Приседания с низким грифом", DatasetID: "1435", DatasetName: "barbell low bar squat", Status: StatusNeedsReview, NameHints: []string{"barbell low bar squat", "low bar squat"}},
 		{ProgramKey: "bulgarian_split_squat", ProgramName: "Болгарские сплит-приседания", DatasetID: "0410", DatasetName: "dumbbell single leg split squat", Status: StatusNeedsReview, NameHints: []string{"dumbbell single leg split squat", "bulgarian split squat", "rear foot elevated split squat"}},
 
-		{ProgramKey: "abs", ProgramName: "Упражнение на пресс", Status: StatusMissing, Notes: "Generic category, not a single dataset exercise."},
-		{ProgramKey: "triceps", ProgramName: "Трицепс", Status: StatusMissing, Notes: "Generic category, not a single dataset exercise."},
+		{ProgramKey: "abs", ProgramName: "Упражнение на пресс", Status: StatusMissing},
+		{ProgramKey: "triceps", ProgramName: "Трицепс", Status: StatusMissing},
 		{ProgramKey: "biceps", ProgramName: "Бицепс", DatasetID: "0294", DatasetName: "barbell curl", Status: StatusConfirmed, NameHints: []string{"barbell curl"}},
 		{ProgramKey: "barbell_row", ProgramName: "Тяга штанги в наклоне", DatasetID: "0027", DatasetName: "barbell bent over row", Status: StatusNeedsReview, NameHints: []string{"barbell bent over row", "bent over barbell row"}},
 		{ProgramKey: "cable_seated_row", ProgramName: "Горизонтальный блок", Status: StatusNeedsReview, NameHints: []string{"seated cable row", "cable seated row"}},

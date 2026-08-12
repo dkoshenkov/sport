@@ -114,6 +114,19 @@ export type TrainingRow = {
   }
 }
 
+export type CheckpointStatus = 'planned' | 'done' | 'skipped' | 'partial'
+
+export type ProgressCheckpoint = {
+  id: string
+  week: ProgramWeek
+  dayId: 'day_1' | 'day_2' | 'day_3'
+  exerciseKey: string
+  rowKind: TrainingRowKind
+  status: CheckpointStatus
+  createdAt: string
+  updatedAt: string
+}
+
 export type ExerciseDetails = {
   exerciseKey: string
   name: string
@@ -126,7 +139,7 @@ export type ExerciseDetails = {
   instructions?: string[]
   media: {
     status: 'available' | 'missing'
-    gifUrl?: string | null
+    imageUrl?: string | null
     width?: number | null
     height?: number | null
   }
@@ -149,7 +162,7 @@ export type ExerciseCatalogItem = {
   instructions: string[]
   media: {
     status: 'available' | 'missing'
-    gifUrl?: string | null
+    imageUrl?: string | null
     width?: number | null
     height?: number | null
   }
@@ -302,15 +315,34 @@ export async function getCurrentCyclePlan(): Promise<TrainingPlan> {
   return request<TrainingPlan>('/v1/cycles/current/plan')
 }
 
+export async function listCurrentCycleProgress(week: ProgramWeek): Promise<ProgressCheckpoint[]> {
+  const data = await request<{ items: ProgressCheckpoint[] }>(`/v1/cycles/current/progress?week=${encodeURIComponent(week)}`)
+  return data.items
+}
+
+export async function upsertCurrentCycleCheckpoint(input: {
+  week: ProgramWeek
+  dayId: 'day_1' | 'day_2' | 'day_3'
+  exerciseKey: string
+  rowKind: TrainingRowKind
+  status: CheckpointStatus
+}): Promise<ProgressCheckpoint> {
+  const data = await request<{ checkpoint: ProgressCheckpoint }>('/v1/cycles/current/progress/checkpoints', {
+    method: 'PUT',
+    body: JSON.stringify({ checkpoint: input }),
+  })
+  return data.checkpoint
+}
+
 export async function getExerciseDetails(exerciseKey: string): Promise<ExerciseDetails> {
   const data = await request<{ exercise: ExerciseDetails }>(`/v1/exercises/${encodeURIComponent(exerciseKey)}`)
   return data.exercise
 }
 
-export async function listExercises(params: { query?: string; hasGif?: boolean; limit?: number; offset?: number } = {}): Promise<ExerciseCatalogResponse> {
+export async function listExercises(params: { query?: string; hasImage?: boolean; limit?: number; offset?: number } = {}): Promise<ExerciseCatalogResponse> {
   const search = new URLSearchParams()
   if (params.query) search.set('query', params.query)
-  if (params.hasGif) search.set('hasGif', 'true')
+  if (params.hasImage) search.set('hasImage', 'true')
   if (params.limit) search.set('limit', String(params.limit))
   if (params.offset) search.set('offset', String(params.offset))
   const suffix = search.toString() ? `?${search.toString()}` : ''
