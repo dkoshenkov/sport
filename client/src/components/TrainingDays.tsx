@@ -1,12 +1,12 @@
 import { cn } from '../app/cn'
-import type { ProgressCheckpoint, TrainingDay, TrainingRow } from '../app/api'
+import type { CheckpointStatus, ProgressCheckpoint, TrainingDay, TrainingRow } from '../app/api'
 
 type TrainingDaysProps = {
   days: TrainingDay[]
   checkpoints: ProgressCheckpoint[]
   selectedExerciseKey: string
   onSelectExercise: (exerciseKey: string) => void
-  onToggleCheckpoint: (dayId: TrainingDay['id'], row: TrainingRow) => Promise<void>
+  onUpdateCheckpoint: (dayId: TrainingDay['id'], row: TrainingRow, status: CheckpointStatus, completedSets?: number) => Promise<void>
   isSaving: (dayId: TrainingDay['id'], exerciseKey: string) => boolean
 }
 
@@ -21,7 +21,7 @@ const kgFormatter = new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 1,
 })
 
-export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectExercise, onToggleCheckpoint, isSaving }: TrainingDaysProps) {
+export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectExercise, onUpdateCheckpoint, isSaving }: TrainingDaysProps) {
   return (
     <section aria-labelledby="training-days-title" className="min-w-0">
       <div className="mb-3 flex items-end justify-between gap-3">
@@ -29,7 +29,7 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
           <h2 id="training-days-title" className="text-balance text-base font-semibold text-slate-950">
             Тренировочные дни
           </h2>
-          <p className="text-pretty text-sm text-slate-600">Отметьте каждое выполненное упражнение. День закроется после последней отметки.</p>
+          <p className="text-pretty text-sm text-slate-600">Считайте подходы кнопками +/− или отметьте упражнение целиком. День закроется после последнего упражнения.</p>
         </div>
       </div>
       <div className="grid gap-4">
@@ -81,11 +81,12 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
                             </div>
                           </div>
                         </div>
-                        <CheckpointToggle
-                          checked={isDone(day.id, row.exerciseKey, checkpoints)}
+                        <CheckpointControls
+                          checkpoint={findCheckpoint(day.id, row.exerciseKey, checkpoints)}
                           disabled={isSaving(day.id, row.exerciseKey)}
                           exerciseName={row.exerciseName}
-                          onChange={() => void onToggleCheckpoint(day.id, row)}
+                          prescribedSets={row.prescription.sets}
+                          onUpdate={(status, completedSets) => void onUpdateCheckpoint(day.id, row, status, completedSets)}
                         />
                       </div>
                     </div>
@@ -103,7 +104,7 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
                       <th className="w-28 px-3 py-2 font-semibold" scope="col">Подходы</th>
                       <th className="w-32 px-3 py-2 font-semibold" scope="col">Вес / RPE</th>
                       <th className="w-12 px-3 py-2 font-semibold" scope="col">Марк.</th>
-                      <th className="w-20 px-3 py-2 font-semibold" scope="col">Готово</th>
+                      <th className="w-44 px-3 py-2 font-semibold" scope="col">Прогресс</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -126,11 +127,12 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
                         <td className="px-3 py-2 font-mono text-slate-950 tabular-nums">{loadText(row)}</td>
                         <td className="px-3 py-2 text-xs text-slate-500">{row.prescription.unit ?? ''}</td>
                         <td className="px-3 py-2">
-                          <CheckpointToggle
-                            checked={isDone(day.id, row.exerciseKey, checkpoints)}
+                          <CheckpointControls
+                            checkpoint={findCheckpoint(day.id, row.exerciseKey, checkpoints)}
                             disabled={isSaving(day.id, row.exerciseKey)}
                             exerciseName={row.exerciseName}
-                            onChange={() => void onToggleCheckpoint(day.id, row)}
+                            prescribedSets={row.prescription.sets}
+                            onUpdate={(status, completedSets) => void onUpdateCheckpoint(day.id, row, status, completedSets)}
                           />
                         </td>
                       </tr>
@@ -146,19 +148,67 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
   )
 }
 
-function CheckpointToggle({ checked, disabled, exerciseName, onChange }: { checked: boolean; disabled: boolean; exerciseName: string; onChange: () => void }) {
+function CheckpointControls({ checkpoint, disabled, exerciseName, prescribedSets, onUpdate }: {
+  checkpoint?: ProgressCheckpoint
+  disabled: boolean
+  exerciseName: string
+  prescribedSets?: number | null
+  onUpdate: (status: CheckpointStatus, completedSets?: number) => void
+}) {
+  const completedSets = checkpoint?.completed?.sets ?? 0
+  const hasSetCounter = typeof prescribedSets === 'number' && prescribedSets > 0
+  const isDone = checkpoint?.status === 'done'
+  const canIncrement = hasSetCounter && completedSets < prescribedSets
+  const canDecrement = hasSetCounter && completedSets > 0
+
+  function updateSetCount(nextSets: number) {
+    const status = nextSets >= prescribedSets! ? 'done' : nextSets > 0 ? 'partial' : 'planned'
+    onUpdate(status, nextSets)
+  }
+
   return (
-    <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600">
-      <input
-        aria-label={checked ? `Снять отметку: ${exerciseName}` : `Отметить выполненным: ${exerciseName}`}
-        checked={checked}
-        className="h-5 w-5 accent-emerald-600 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+      {hasSetCounter ? (
+        <div className="flex items-center gap-1" aria-label={`Подходы: ${completedSets} из ${prescribedSets}`}>
+          <button
+            aria-label={`Убавить подход: ${exerciseName}`}
+            className="grid h-8 w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+            disabled={disabled || !canDecrement}
+            type="button"
+            onClick={() => updateSetCount(completedSets - 1)}
+          >
+            −
+          </button>
+          <span className="min-w-16 text-center text-xs font-semibold tabular-nums text-slate-700">{completedSets}/{prescribedSets}</span>
+          <button
+            aria-label={`Добавить подход: ${exerciseName}`}
+            className="grid h-8 w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+            disabled={disabled || !canIncrement}
+            type="button"
+            onClick={() => updateSetCount(completedSets + 1)}
+          >
+            +
+          </button>
+        </div>
+      ) : null}
+      <button
+        aria-label={isDone ? `Отменить выполнение: ${exerciseName}` : `Отметить выполненным: ${exerciseName}`}
+        className={cn(
+          'h-8 border px-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2',
+          isDone ? 'border-emerald-700 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800',
+        )}
         disabled={disabled}
-        type="checkbox"
-        onChange={onChange}
-      />
-    </label>
+        type="button"
+        onClick={() => onUpdate(isDone ? 'planned' : 'done', completedSets || undefined)}
+      >
+        {isDone ? 'Отменить' : 'Сделано'}
+      </button>
+    </div>
   )
+}
+
+function findCheckpoint(dayId: TrainingDay['id'], exerciseKey: string, checkpoints: ProgressCheckpoint[]) {
+  return checkpoints.find((checkpoint) => checkpoint.dayId === dayId && checkpoint.exerciseKey === exerciseKey)
 }
 
 function isDone(dayId: TrainingDay['id'], exerciseKey: string, checkpoints: ProgressCheckpoint[]) {

@@ -50,10 +50,9 @@ export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan
     await onRefreshPlan()
   }
 
-  async function toggleCheckpoint(day: TrainingDay['id'], row: TrainingRow) {
+  async function updateCheckpoint(day: TrainingDay['id'], row: TrainingRow, status: ProgressCheckpoint['status'], completedSets?: number) {
     const key = `${day}:${row.exerciseKey}`
     if (savingKey) return
-    const current = checkpoints.find((checkpoint) => checkpoint.dayId === day && checkpoint.exerciseKey === row.exerciseKey)
     setSavingKey(key)
     setProgressError('')
     try {
@@ -62,7 +61,8 @@ export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan
         dayId: day,
         exerciseKey: row.exerciseKey,
         rowKind: row.kind,
-        status: current?.status === 'done' ? 'planned' : 'done',
+        status,
+        completed: completedSets === undefined ? undefined : { sets: completedSets },
       })
       setCheckpoints((items) => [...items.filter((item) => !(item.dayId === checkpoint.dayId && item.exerciseKey === checkpoint.exerciseKey)), checkpoint])
       const nextCycle = await getCurrentCycle()
@@ -149,7 +149,7 @@ export function ProgramShell({ cycle, options, plan, onCycleSaved, onRefreshPlan
             days={plan.days}
             isSaving={(day, exerciseKey) => savingKey === `${day}:${exerciseKey}`}
             onSelectExercise={setSelectedExerciseKey}
-            onToggleCheckpoint={toggleCheckpoint}
+            onUpdateCheckpoint={updateCheckpoint}
             selectedExerciseKey={selectedExerciseKey}
           />
           <ExerciseDetailsPanel exerciseKey={selectedExerciseKey} />

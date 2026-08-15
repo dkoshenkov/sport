@@ -5753,6 +5753,12 @@ func (s *Prescription) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *Prescription) encodeFields(e *jx.Encoder) {
 	{
+		if s.Sets.Set {
+			e.FieldStart("sets")
+			s.Sets.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("setsRepsText")
 		e.Str(s.SetsRepsText)
 	}
@@ -5782,12 +5788,13 @@ func (s *Prescription) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfPrescription = [5]string{
-	0: "setsRepsText",
-	1: "weightKg",
-	2: "weightText",
-	3: "rpeText",
-	4: "unit",
+var jsonFieldsNameOfPrescription = [6]string{
+	0: "sets",
+	1: "setsRepsText",
+	2: "weightKg",
+	3: "weightText",
+	4: "rpeText",
+	5: "unit",
 }
 
 // Decode decodes Prescription from json.
@@ -5799,6 +5806,16 @@ func (s *Prescription) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "sets":
+			if err := func() error {
+				s.Sets.Reset()
+				if err := s.Sets.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"sets\"")
+			}
 		case "setsRepsText":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {

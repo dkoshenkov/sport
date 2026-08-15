@@ -3,6 +3,8 @@ package program
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"sport/server/internal/api"
 )
@@ -300,7 +302,20 @@ func compactRows(rows []api.TrainingRow) []api.TrainingRow {
 }
 
 func row(rowID, key, name string, kind api.TrainingRowKind, prescription api.Prescription) api.TrainingRow {
+	prescription.Sets = prescribedSets(prescription.SetsRepsText)
 	return api.TrainingRow{RowId: rowID, ExerciseKey: key, ExerciseName: name, Kind: kind, Prescription: prescription}
+}
+
+func prescribedSets(setsRepsText string) api.OptNilInt {
+	separator := strings.IndexAny(setsRepsText, "xхXХ")
+	if separator <= 0 {
+		return api.OptNilInt{}
+	}
+	sets, err := strconv.Atoi(strings.TrimSpace(setsRepsText[:separator]))
+	if err != nil || sets < 1 {
+		return api.OptNilInt{}
+	}
+	return api.NewOptNilInt(sets)
 }
 
 func option(id, label string) api.SelectOption {

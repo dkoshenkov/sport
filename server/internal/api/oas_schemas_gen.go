@@ -2465,11 +2465,17 @@ type Password string
 
 // Ref: #/components/schemas/Prescription
 type Prescription struct {
+	Sets         OptNilInt     `json:"sets"`
 	SetsRepsText string        `json:"setsRepsText"`
 	WeightKg     OptNilFloat64 `json:"weightKg"`
 	WeightText   OptNilString  `json:"weightText"`
 	RpeText      OptNilString  `json:"rpeText"`
 	Unit         OptNilString  `json:"unit"`
+}
+
+// GetSets returns the value of Sets.
+func (s *Prescription) GetSets() OptNilInt {
+	return s.Sets
 }
 
 // GetSetsRepsText returns the value of SetsRepsText.
@@ -2500,6 +2506,11 @@ func (s *Prescription) GetUnit() OptNilString {
 // SetSetsRepsText sets the value of SetsRepsText.
 func (s *Prescription) SetSetsRepsText(val string) {
 	s.SetsRepsText = val
+}
+
+// SetSets sets the value of Sets.
+func (s *Prescription) SetSets(val OptNilInt) {
+	s.Sets = val
 }
 
 // SetWeightKg sets the value of WeightKg.

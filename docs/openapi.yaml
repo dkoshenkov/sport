@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Training Program Service API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Stateful API contract for the workout program service.
 
@@ -1200,6 +1200,11 @@ components:
       type: object
       required: [setsRepsText]
       properties:
+        sets:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Number of prescribed sets when the exercise has a trackable set count.
         setsRepsText:
           type: string
           example: 5х5
@@ -1335,6 +1340,7 @@ components:
           type: integer
           nullable: true
           minimum: 0
+          description: Number of completed sets tracked for this checkpoint. Reaching the prescribed set count marks the checkpoint as done.
         repsText:
           type: string
           nullable: true

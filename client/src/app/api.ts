@@ -106,6 +106,7 @@ export type TrainingRow = {
   exerciseName: string
   kind: TrainingRowKind
   prescription: {
+    sets?: number | null
     setsRepsText: string
     weightKg?: number | null
     weightText?: string | null
@@ -116,6 +117,13 @@ export type TrainingRow = {
 
 export type CheckpointStatus = 'planned' | 'done' | 'skipped' | 'partial'
 
+export type CheckpointCompletedData = {
+  sets?: number | null
+  repsText?: string | null
+  weightKg?: number | null
+  rpeText?: string | null
+}
+
 export type ProgressCheckpoint = {
   id: string
   week: ProgramWeek
@@ -123,6 +131,7 @@ export type ProgressCheckpoint = {
   exerciseKey: string
   rowKind: TrainingRowKind
   status: CheckpointStatus
+  completed?: CheckpointCompletedData
   createdAt: string
   updatedAt: string
 }
@@ -326,6 +335,7 @@ export async function upsertCurrentCycleCheckpoint(input: {
   exerciseKey: string
   rowKind: TrainingRowKind
   status: CheckpointStatus
+  completed?: CheckpointCompletedData
 }): Promise<ProgressCheckpoint> {
   const data = await request<{ checkpoint: ProgressCheckpoint }>('/v1/cycles/current/progress/checkpoints', {
     method: 'PUT',

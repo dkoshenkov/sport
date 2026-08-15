@@ -63,6 +63,9 @@ func TestCalculateWeekEightUsesOneRepMaxText(t *testing.T) {
 		if day.Rows[0].Kind != api.TrainingRowKindMain {
 			t.Fatalf("%s row kind = %s, want main", day.ID, day.Rows[0].Kind)
 		}
+		if _, ok := day.Rows[0].Prescription.Sets.Get(); ok {
+			t.Fatalf("%s test row has prescribed sets", day.ID)
+		}
 	}
 }
 
@@ -98,6 +101,42 @@ func TestCalculateWeekSevenPatterns(t *testing.T) {
 	assertRow(t, plan.Days[0].Rows[0], api.TrainingRowKindMain, "deadlift", "2x2", 205, "")
 	assertRow(t, plan.Days[0].Rows[1], api.TrainingRowKindLight, "bench_press", "3x3", 82.5, "")
 	assertRow(t, plan.Days[0].Rows[3], api.TrainingRowKindGpp, "barbell_row", "2x5-6", 0, "RPE: 6")
+}
+
+func TestCalculateIncludesPrescribedSetCount(t *testing.T) {
+	plan, err := Calculate(api.ProgramSelection{Settings: DefaultSettings(), Week: api.ProgramWeekWeek3})
+	if err != nil {
+		t.Fatalf("Calculate() error = %v", err)
+	}
+
+	for _, day := range plan.Days {
+		for _, row := range day.Rows {
+			if _, ok := row.Prescription.Sets.Get(); !ok {
+				t.Fatalf("%s has no prescribed set count", row.RowId)
+			}
+		}
+	}
+}
+
+func TestPrescribedSetsParsesTrackablePrescription(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		text string
+		want int
+		ok   bool
+	}{
+		{name: "ascii separator", text: "5x5", want: 5, ok: true},
+		{name: "cyrillic separator", text: "2х5-6", want: 2, ok: true},
+		{name: "test prescription", text: "Тест", ok: false},
+		{name: "invalid set count", text: "0x5", ok: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := prescribedSets(test.text).Get()
+			if ok != test.ok || (ok && got != test.want) {
+				t.Fatalf("prescribedSets(%q) = %d, %v; want %d, %v", test.text, got, ok, test.want, test.ok)
+			}
+		})
+	}
 }
 
 func assertRow(t *testing.T, row api.TrainingRow, kind api.TrainingRowKind, exerciseKey, setsReps string, weight float64, rpe string) {
