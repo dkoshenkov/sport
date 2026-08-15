@@ -199,7 +199,7 @@ function CheckpointControls({ checkpoint, disabled, exerciseName, prescribedSets
         )}
         disabled={disabled}
         type="button"
-        onClick={() => onUpdate(isDone ? 'planned' : 'done', completedSets || undefined)}
+        onClick={() => onUpdate(isDone ? 'planned' : 'done', isDone ? completedSets || undefined : hasSetCounter ? prescribedSets : undefined)}
       >
         {isDone ? 'Отменить' : 'Сделано'}
       </button>
