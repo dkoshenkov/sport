@@ -1,7 +1,7 @@
 -- Explicit Unicode case handling, independent of the database's default locale.
-CREATE COLLATION sport_unicode (provider = icu, locale = 'und');
+CREATE COLLATION IF NOT EXISTS sport_unicode (provider = icu, locale = 'und');
 
-CREATE TABLE exercise_catalog (
+CREATE TABLE IF NOT EXISTS exercise_catalog (
     id text PRIMARY KEY,
     name text NOT NULL,
     category text NOT NULL DEFAULT '',
@@ -13,17 +13,17 @@ CREATE TABLE exercise_catalog (
     gif_url text NOT NULL DEFAULT '',
     has_media boolean NOT NULL DEFAULT false
 );
-CREATE INDEX exercise_catalog_name_idx ON exercise_catalog (lower(name), id);
-CREATE INDEX exercise_catalog_target_idx ON exercise_catalog (target);
-CREATE INDEX exercise_catalog_equipment_idx ON exercise_catalog (equipment);
-CREATE TABLE exercise_aliases (
+CREATE INDEX IF NOT EXISTS exercise_catalog_name_idx ON exercise_catalog (lower(name), id);
+CREATE INDEX IF NOT EXISTS exercise_catalog_target_idx ON exercise_catalog (target);
+CREATE INDEX IF NOT EXISTS exercise_catalog_equipment_idx ON exercise_catalog (equipment);
+CREATE TABLE IF NOT EXISTS exercise_aliases (
     program_key text PRIMARY KEY,
     program_name text NOT NULL,
     dataset_id text REFERENCES exercise_catalog(id),
     review_status text NOT NULL CHECK (review_status IN ('confirmed', 'missing', 'needs_review')),
     name_hints text[] NOT NULL DEFAULT '{}'
 );
-CREATE TABLE reference_imports (
+CREATE TABLE IF NOT EXISTS reference_imports (
     name text PRIMARY KEY,
     imported_at timestamptz NOT NULL DEFAULT now()
 );
@@ -62,4 +62,5 @@ INSERT INTO exercise_aliases(program_key,program_name,review_status,name_hints) 
 ('handstand_push_up','Отжимания в стойке на руках','needs_review',ARRAY['handstand push-up']::text[]),
 ('kettlebell_military_press','Армейский жим гирь','needs_review',ARRAY['0553','kettlebell two arm military press','kettlebell clean and press','kettlebell press']::text[]),
 ('one_arm_military_press','Армейский жим одной рукой','needs_review',ARRAY['0361','dumbbell one arm shoulder press','one arm dumbbell press','single arm shoulder press']::text[]),
-('barbell_military_press','Армейский жим штанги','needs_review',ARRAY['1456','barbell standing close grip military press','barbell standing military press','barbell shoulder press']::text[]);
+('barbell_military_press','Армейский жим штанги','needs_review',ARRAY['1456','barbell standing close grip military press','barbell standing military press','barbell shoulder press']::text[])
+ON CONFLICT (program_key) DO NOTHING;

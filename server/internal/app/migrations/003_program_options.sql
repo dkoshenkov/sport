@@ -1,4 +1,4 @@
-CREATE TABLE program_options (id text PRIMARY KEY, options jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS program_options (id text PRIMARY KEY, options jsonb NOT NULL);
 
 INSERT INTO program_options(id, options) VALUES (
     'xlsx-linear-cycle-v1',
@@ -228,4 +228,5 @@ INSERT INTO program_options(id, options) VALUES (
     ]
   }
 }'::jsonb
-);
+)
+ON CONFLICT (id) DO NOTHING;

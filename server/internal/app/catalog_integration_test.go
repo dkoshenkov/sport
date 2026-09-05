@@ -127,4 +127,35 @@ func TestPostgresReferenceData(t *testing.T) {
 	if err != nil || plan.Days[0].Rows[2].ExerciseName != "Новая тяга" {
 		t.Fatalf("calculator did not read DB options: %v", err)
 	}
+	// Simulate an existing deployment whose tables/data predate migration tracking.
+	if _, err = pool.Exec(ctx, `UPDATE exercise_aliases SET program_name='Custom name' WHERE program_key='deadlift'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `DROP TABLE schema_migrations`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err = RunMigrations(ctx, pool); err != nil {
+			t.Fatalf("migrate existing untracked schema: %v", err)
+		}
+	}
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 3 {
+		t.Fatalf("recovered migration versions=%d: %v", versions, err)
+	}
+	var name string
+	if err = pool.QueryRow(ctx, `SELECT name FROM exercise_catalog WHERE id='0032'`).Scan(&name); err != nil || name != "Edited in DB" {
+		t.Fatalf("migration overwrote exercise: %q, %v", name, err)
+	}
+	if err = pool.QueryRow(ctx, `SELECT program_name FROM exercise_aliases WHERE program_key='deadlift'`).Scan(&name); err != nil || name != "Custom name" {
+		t.Fatalf("migration overwrote alias: %q, %v", name, err)
+	}
+	preserved, err := store.ProgramOptions(ctx)
+	if err != nil || len(preserved.Assistance.Deadlift) != 1 || preserved.Assistance.Deadlift[0].ID != "new_lift" {
+		t.Fatalf("migration overwrote program options: %v", err)
+	}
+	catalog, err = exercises.NewPostgresCatalog(ctx, pool, "/missing-dataset")
+	if err != nil {
+		t.Fatalf("migration lost completed import: %v", err)
+	}
+
 }
