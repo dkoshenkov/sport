@@ -36,7 +36,7 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
         {days.map((day) => {
           const closed = dayDone(day, checkpoints)
           return (
-            <article key={day.id} className="border border-slate-200 bg-white">
+            <article key={day.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-950">{day.label}</h3>
@@ -54,19 +54,19 @@ export function TrainingDays({ days, checkpoints, selectedExerciseKey, onSelectE
                       key={row.rowId}
                       className={cn('p-4', row.exerciseKey === selectedExerciseKey && 'bg-sky-50')}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">{kindLabels[row.kind]}</span>
+                      <div className="flex flex-col gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-start gap-2">
+                            <span className="mt-3 shrink-0 rounded bg-slate-100 px-1.5 py-1 text-xs font-semibold text-slate-500">{kindLabels[row.kind]}</span>
                             <button
-                              className="text-left text-sm font-medium text-slate-950 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+                              className="min-h-11 min-w-0 flex-1 py-2 text-left text-base font-semibold text-slate-950 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
                               type="button"
                               onClick={() => onSelectExercise(row.exerciseKey)}
                             >
                               {row.exerciseName}
                             </button>
                           </div>
-                          <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div className="mt-2 grid grid-cols-[1fr_1.3fr_.7fr] gap-2 rounded-xl bg-slate-50 p-3 text-sm">
                             <div>
                               <div className="text-slate-500">Подходы</div>
                               <div className="font-mono text-slate-800 tabular-nums">{row.prescription.setsRepsText}</div>
@@ -167,22 +167,22 @@ function CheckpointControls({ checkpoint, disabled, exerciseName, prescribedSets
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
       {hasSetCounter ? (
         <div className="flex items-center gap-1" aria-label={`Подходы: ${completedSets} из ${prescribedSets}`}>
           <button
             aria-label={`Убавить подход: ${exerciseName}`}
-            className="grid h-8 w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+            className="grid h-11 w-11 rounded-lg lg:h-8 lg:w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
             disabled={disabled || !canDecrement}
             type="button"
             onClick={() => updateSetCount(completedSets - 1)}
           >
             −
           </button>
-          <span className="min-w-16 text-center text-xs font-semibold tabular-nums text-slate-700">{completedSets}/{prescribedSets}</span>
+          <span className="min-w-12 text-center text-xs font-semibold tabular-nums text-slate-700">{completedSets}/{prescribedSets}</span>
           <button
             aria-label={`Добавить подход: ${exerciseName}`}
-            className="grid h-8 w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+            className="grid h-11 w-11 rounded-lg lg:h-8 lg:w-8 place-items-center border border-slate-300 bg-white text-lg font-medium leading-none text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
             disabled={disabled || !canIncrement}
             type="button"
             onClick={() => updateSetCount(completedSets + 1)}
@@ -194,7 +194,7 @@ function CheckpointControls({ checkpoint, disabled, exerciseName, prescribedSets
       <button
         aria-label={isDone ? `Отменить выполнение: ${exerciseName}` : `Отметить выполненным: ${exerciseName}`}
         className={cn(
-          'h-8 border px-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2',
+          'min-h-11 rounded-lg border px-4 text-sm font-semibold disabled:opacity-50 lg:min-h-8 lg:px-2 lg:text-xs transition focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2',
           isDone ? 'border-emerald-700 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800',
         )}
         disabled={disabled}

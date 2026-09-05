@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { ExerciseTags } from './ExerciseTags'
 import { getExerciseDetails, type ExerciseDetails } from '../app/api'
 
@@ -8,6 +8,7 @@ type ExerciseDetailsPanelProps = {
 }
 
 export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDetailsPanelProps) {
+  const titleId = useId()
   const [details, setDetails] = useState<ExerciseDetails | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -39,9 +40,9 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
   }, [exerciseKey, onUnauthorized])
 
   return (
-    <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4" aria-labelledby="exercise-details-title">
+    <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4" aria-labelledby={titleId}>
       <div className="border-b border-slate-200 px-4 py-3">
-        <h2 id="exercise-details-title" className="text-balance text-base font-semibold text-slate-950">
+        <h2 id={titleId} className="text-balance text-base font-semibold text-slate-950">
           Детали упражнения
         </h2>
         <p className="mt-1 text-pretty text-sm text-slate-600">

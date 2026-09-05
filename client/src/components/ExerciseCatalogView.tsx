@@ -10,6 +10,7 @@ const emptyCatalog: ExerciseCatalogResponse = { items: [], total: 0, limit: page
 
 export function ExerciseCatalogView() {
   const [filters, setFilters] = useState({ query: '', muscle: '', equipment: '', bodyPart: '', hasImage: false })
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [offset, setOffset] = useState(0)
   const [catalog, setCatalog] = useState(emptyCatalog)
@@ -76,14 +77,26 @@ export function ExerciseCatalogView() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <label htmlFor="exercise-search" className="text-sm font-semibold text-slate-800">Поиск упражнений</label>
         <input id="exercise-search" type="search" autoComplete="off" placeholder="Название, мышца или оборудование…" value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} className="catalog-input mt-2 w-full" />
+        <button
+          type="button"
+          className="mt-3 flex min-h-11 w-full items-center justify-between rounded-lg bg-slate-50 px-3 text-sm font-semibold text-sky-800 sm:hidden"
+          aria-expanded={filtersExpanded}
+          aria-controls="catalog-filters"
+          onClick={() => setFiltersExpanded((value) => !value)}
+        >
+          <span>Фильтры{activeFilters > 0 ? ` · ${activeFilters}` : ''}</span>
+          <span aria-hidden="true">{filtersExpanded ? '−' : '+'}</span>
+        </button>
+        <div id="catalog-filters" className={cn(filtersExpanded ? 'block' : 'hidden', 'sm:block')}>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Filter label="Мышцы" value={filters.muscle} values={catalog.muscles} onChange={(value) => updateFilter('muscle', value)} />
           <Filter label="Оборудование" value={filters.equipment} values={catalog.equipment} onChange={(value) => updateFilter('equipment', value)} />
           <Filter label="Часть тела" value={filters.bodyPart} values={catalog.bodyParts} onChange={(value) => updateFilter('bodyPart', value)} />
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 accent-sky-700" checked={filters.hasImage} onChange={(event) => updateFilter('hasImage', event.target.checked)} />С демонстрацией техники</label>
-          {activeFilters > 0 && <button className="text-sm font-semibold text-sky-700 hover:underline" onClick={() => { setFilters({ query: '', muscle: '', equipment: '', bodyPart: '', hasImage: false }); setOffset(0); setSelected(null) }}>Сбросить фильтры · {activeFilters}</button>}
+          <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 accent-sky-700" checked={filters.hasImage} onChange={(event) => updateFilter('hasImage', event.target.checked)} />С демонстрацией техники</label>
+          {activeFilters > 0 && <button className="min-h-11 text-sm font-semibold text-sky-700 hover:underline" onClick={() => { setFilters({ query: '', muscle: '', equipment: '', bodyPart: '', hasImage: false }); setOffset(0); setSelected(null) }}>Сбросить фильтры · {activeFilters}</button>}
+        </div>
         </div>
       </div>
 
@@ -95,9 +108,9 @@ export function ExerciseCatalogView() {
             <h2 className="text-base font-semibold text-slate-900">Упражнения</h2>
             <span className="text-sm text-slate-500" aria-live="polite">{loading ? 'Загрузка…' : `${catalog.total} найдено`}</span>
           </div>
-          {loading ? <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-72 animate-pulse rounded-2xl bg-slate-200 motion-reduce:animate-none" />)}</div> : !error && catalog.items.length === 0 ? (
+          {loading ? <div className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-72 animate-pulse rounded-2xl bg-slate-200 motion-reduce:animate-none" />)}</div> : !error && catalog.items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><h3 className="font-semibold text-slate-900">Ничего не найдено</h3><p className="mt-2 text-sm text-slate-500">Попробуй другое название или убери часть фильтров.</p></div>
-          ) : !error && <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+          ) : !error && <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:gap-4 lg:grid-cols-3">
             {catalog.items.map((exercise) => <button key={exercise.datasetExerciseId} type="button" aria-pressed={selected?.datasetExerciseId === exercise.datasetExerciseId} onClick={() => { setSelected(exercise); if (window.innerWidth < 1280) setDetailOpen(true) }} className={cn('exercise-card group', selected?.datasetExerciseId === exercise.datasetExerciseId && 'exercise-card--selected')}>
               <ExerciseImage key={exercise.datasetExerciseId} exercise={exercise} />
               <span className="block p-3 sm:p-4">
@@ -106,7 +119,7 @@ export function ExerciseCatalogView() {
               </span>
             </button>)}
           </div>}
-          {!loading && !error && catalog.total > pageSize && <nav aria-label="Страницы каталога" className="mt-5 flex items-center justify-between gap-2">
+          {!loading && !error && catalog.total > pageSize && <nav aria-label="Страницы каталога" className="mt-5 flex flex-wrap items-center justify-between gap-2">
             <button className="catalog-page" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - pageSize)); setSelected(null) }}>← Назад</button>
             <span className="text-xs text-slate-500">{offset + 1}–{Math.min(offset + pageSize, catalog.total)} из {catalog.total}</span>
             <button className="catalog-page" disabled={offset + pageSize >= catalog.total} onClick={() => { setOffset(offset + pageSize); setSelected(null) }}>Далее →</button>

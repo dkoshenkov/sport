@@ -185,3 +185,52 @@ select {
 }
 .catalog-page:disabled { opacity: .4; cursor: default; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Keep intrinsic text and native form controls within narrow screens. */
+h1, h2, h3, p, dd, button { overflow-wrap: anywhere; }
+input, select, fieldset { min-width: 0; }
+
+@media (max-width: 639px) {
+  html { scroll-padding-bottom: 6rem; }
+  button { min-height: 44px; }
+  input:not([type='checkbox']):not([type='radio']), select {
+    min-height: 48px;
+    max-width: 100%;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+  .workspace {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .workspace-main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  .workspace-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    margin: 0;
+    gap: .25rem;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 0;
+    background: #fff;
+    padding: .5rem max(.5rem, env(safe-area-inset-right)) calc(.5rem + env(safe-area-inset-bottom)) max(.5rem, env(safe-area-inset-left));
+    box-shadow: 0 -4px 20px #0f172a08;
+  }
+  .workspace-nav button { border: 0; border-radius: 12px; }
+  .workspace-nav button[aria-current='page'] { background: #e0f2fe; color: #075985; }
+  .dialog-panel {
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)));
+    translate: -50% 0;
+    transform: none;
+    border-radius: 20px 20px 0 0;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .dialog-content { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .catalog-hero { gap: 1rem; padding-top: .5rem; }
+  .strength-celebration__burst { overflow: clip; }
+}

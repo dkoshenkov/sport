@@ -50,7 +50,7 @@ export function WorkspaceShell({
   }
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950">
+    <div className="workspace min-h-dvh bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-[1480px] px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -61,7 +61,7 @@ export function WorkspaceShell({
             <div className="flex items-center justify-between gap-3 lg:justify-end">
               <StrengthGreeting nickname={user.nickname} />
               <button
-                className="h-10 border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+                className="h-10 shrink-0 border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
                 type="button"
                 onClick={signOut}
               >
@@ -70,18 +70,18 @@ export function WorkspaceShell({
             </div>
           </div>
 
-          <nav className="mt-4 flex gap-1 border-b border-slate-200" aria-label="Разделы приложения">
+          <nav className="workspace-nav mt-4 flex gap-1 border-b border-slate-200" aria-label="Разделы приложения">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                className={`h-10 border-b-2 px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2 ${
+                className={`min-h-12 flex-1 border-b-2 px-2 sm:flex-none sm:px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2 ${
                   activeTab === tab.id
                     ? 'border-sky-700 text-sky-800'
                     : 'border-transparent text-slate-600 hover:text-slate-950'
                 }`}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
                 type="button"
-                onClick={() => onSetTab(tab.id)}
+                onClick={() => { onSetTab(tab.id); window.scrollTo({ top: 0, behavior: 'instant' }) }}
               >
                 {tab.label}
               </button>
@@ -90,7 +90,7 @@ export function WorkspaceShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 sm:py-8">
+      <main className="workspace-main mx-auto max-w-[1480px] px-3 py-4 sm:px-6 sm:py-8">
         {activeTab === 'program' ? (
           cycle && plan ? (
             <ProgramShell

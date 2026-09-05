@@ -21,6 +21,13 @@ export function Modal({ isOpen, onClose, title, panelClassName = 'max-w-md sm:ma
     }
   }, [isOpen])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [isOpen])
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
     if (e.target === dialogRef.current) {
       onClose()
@@ -31,22 +38,22 @@ export function Modal({ isOpen, onClose, title, panelClassName = 'max-w-md sm:ma
     <dialog
       ref={dialogRef}
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 m-0 h-dvh w-screen overscroll-contain bg-black/50 p-0"
+      className="app-dialog fixed inset-0 z-50 m-0 h-dvh max-h-none w-full max-w-none overscroll-contain bg-black/50 p-0"
       onClick={handleBackdropClick}
       onClose={onClose}
     >
       <div
         className={cn(
-          'absolute left-1/2 top-1/2 max-h-[90vh] w-[90vw] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl',
+          'dialog-panel absolute left-1/2 top-1/2 flex max-h-[90dvh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl',
           panelClassName,
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="flex items-start justify-between">
+        <div className="shrink-0 border-b border-slate-200 px-4 py-2">
+          <div className="flex items-center justify-between gap-3">
             <h2 id={titleId} className="text-balance text-base font-semibold text-slate-950">{title}</h2>
             <button
-              className="text-slate-400 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
+              className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2"
               type="button"
               onClick={onClose}
               aria-label="Закрыть"
@@ -57,7 +64,7 @@ export function Modal({ isOpen, onClose, title, panelClassName = 'max-w-md sm:ma
             </button>
           </div>
         </div>
-        <div className="p-4">
+        <div className="dialog-content min-h-0 overflow-y-auto overscroll-contain p-4">
           {children}
         </div>
       </div>

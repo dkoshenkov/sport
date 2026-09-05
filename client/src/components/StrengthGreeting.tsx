@@ -23,12 +23,12 @@ export function StrengthGreeting({ nickname }: { nickname: string }) {
   }, [isStrongest, nickname])
 
   if (!isStrongest) {
-    return <span className="text-sm font-medium text-slate-700">{nickname}</span>
+    return <span className="min-w-0 break-words text-sm font-medium text-slate-700">{nickname}</span>
   }
 
   return (
-    <span className="strength-celebration">
-      <span className="relative z-10 inline-flex border border-amber-300 bg-amber-50 px-2.5 py-1 text-sm font-semibold text-amber-950 shadow-sm" aria-hidden="true">
+    <span className="strength-celebration min-w-0">
+      <span className="relative z-10 inline-flex flex-wrap break-words border border-amber-300 bg-amber-50 px-2.5 py-1 text-sm font-semibold text-amber-950 shadow-sm" aria-hidden="true">
         <span className="mr-1 text-amber-800">самый сильный</span>
         {nickname}
       </span>

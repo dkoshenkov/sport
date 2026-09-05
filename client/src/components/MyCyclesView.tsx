@@ -166,7 +166,7 @@ function CycleCard({ cycle, options, isPending, onOpen, onActivate, onEdit }: {
   onEdit: () => void
 }) {
   return (
-    <article className="border border-slate-200 bg-white p-4">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-950">{cycle.title}</h2>
@@ -184,7 +184,7 @@ function CycleCard({ cycle, options, isPending, onOpen, onActivate, onEdit }: {
           <dd className="font-medium text-slate-800">{labelFor(options.progressionSteps, cycle.settings.progressionStep)}</dd>
         </div>
       </dl>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
         <button className="h-10 border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-700 focus:ring-offset-2" type="button" onClick={onOpen}>
           Открыть
         </button>
