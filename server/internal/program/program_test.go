@@ -8,7 +8,7 @@ import (
 
 func TestCalculateUsesXLSXCompatibleFourPercentProgression(t *testing.T) {
 	settings := DefaultSettings()
-	plan, err := Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek1})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek1})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestCalculateUsesXLSXCompatibleFourPercentProgression(t *testing.T) {
 func TestCalculateAllowsExplicitFivePercentProgression(t *testing.T) {
 	settings := DefaultSettings()
 	settings.ProgressionStep = api.ProgressionStepStep5Percent
-	plan, err := Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek6})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek6})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -44,7 +44,7 @@ func TestCalculateAllowsExplicitFivePercentProgression(t *testing.T) {
 
 func TestCalculateWeekEightUsesOneRepMaxText(t *testing.T) {
 	settings := DefaultSettings()
-	plan, err := Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek8})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek8})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCalculateMatchesClientXLSXRows(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Assistance.Deadlift = "paused_deadlift"
 	settings.Gpp.Abs = api.NewNilString("abs")
-	plan, err := Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek3})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek3})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestCalculateMatchesClientXLSXRows(t *testing.T) {
 
 func TestCalculateWeekSevenPatterns(t *testing.T) {
 	settings := DefaultSettings()
-	plan, err := Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek7})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek7})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestCalculateWeekSevenPatterns(t *testing.T) {
 }
 
 func TestCalculateIncludesPrescribedSetCount(t *testing.T) {
-	plan, err := Calculate(api.ProgramSelection{Settings: DefaultSettings(), Week: api.ProgramWeekWeek3})
+	plan, err := NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: DefaultSettings(), Week: api.ProgramWeekWeek3})
 	if err != nil {
 		t.Fatalf("Calculate() error = %v", err)
 	}
@@ -164,5 +164,43 @@ func assertRow(t *testing.T, row api.TrainingRow, kind api.TrainingRowKind, exer
 		if !ok || got != rpe {
 			t.Fatalf("%s rpe = %q, ok = %v; want %q", row.RowId, got, ok, rpe)
 		}
+	}
+}
+
+func TestCalculatorUsesProvidedExerciseOptions(t *testing.T) {
+	options := testProgramOptions()
+	options.Assistance.Deadlift = []api.SelectOption{{ID: "custom_deadlift", Label: "Новая тяга"}}
+	calculator := NewCalculator(options)
+	settings := DefaultSettings()
+	settings.Assistance.Deadlift = "custom_deadlift"
+	plan, err := calculator.Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Days[0].Rows[2].ExerciseName; got != "Новая тяга" {
+		t.Fatalf("name = %q", got)
+	}
+	settings.Assistance.Bench = "custom_deadlift"
+	if _, err = calculator.Calculate(api.ProgramSelection{Settings: settings, Week: api.ProgramWeekWeek1}); err == nil {
+		t.Fatal("accepted exercise from the wrong group")
+	}
+}
+
+// Minimal inputs for these unit tests; production options are seeded by SQL.
+func testProgramOptions() *api.ProgramOptionsResponse {
+	return &api.ProgramOptionsResponse{
+		Assistance: api.AssistanceOptions{
+			Deadlift: []api.SelectOption{{ID: "good_morning", Label: "Гуд-морнинг"}, {ID: "paused_deadlift", Label: "Становая тяга с паузами"}},
+			Bench:    []api.SelectOption{{ID: "close_grip_bench", Label: "Жим узким хватом"}},
+			Squat:    []api.SelectOption{{ID: "front_squat", Label: "Фронтальный присед"}},
+		},
+		Gpp: api.GPPOptions{
+			Abs:            []api.SelectOption{{ID: "abs", Label: "Пресс"}},
+			Triceps:        []api.SelectOption{{ID: "triceps", Label: "Трицепс"}},
+			HorizontalPull: []api.SelectOption{{ID: "barbell_row", Label: "Тяга штанги"}},
+			Biceps:         []api.SelectOption{{ID: "biceps", Label: "Бицепс"}},
+			VerticalPull:   []api.SelectOption{{ID: "pull_up", Label: "Подтягивания"}},
+			OverheadPress:  []api.SelectOption{{ID: "kettlebell_military_press", Label: "Жим над головой"}},
+		},
 	}
 }

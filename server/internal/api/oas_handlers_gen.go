@@ -3111,6 +3111,18 @@ func (s *Server) handleListExercisesRequest(args [0]string, argsEscaped bool, w 
 					Name: "hasImage",
 					In:   "query",
 				}: params.HasImage,
+				{
+					Name: "muscle",
+					In:   "query",
+				}: params.Muscle,
+				{
+					Name: "equipment",
+					In:   "query",
+				}: params.Equipment,
+				{
+					Name: "bodyPart",
+					In:   "query",
+				}: params.BodyPart,
 			},
 			Raw: r,
 		}

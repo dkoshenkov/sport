@@ -27,7 +27,7 @@ func TestCatalogReadsExercisesDatasetDirectly(t *testing.T) {
 	}
 	imageURL, ok := response.Items[0].Media.ImageUrl.Get()
 	if !ok || imageURL.String() != "/videos/0032-ila4NZS.gif" {
-		t.Fatalf("image URL = %q, %v; want /videos/0032-ila4NZS.gif", imageURL, ok)
+		t.Fatalf("image URL = %q, %v; want /videos/0032-ila4NZS.gif", imageURL.String(), ok)
 	}
 }
 
@@ -37,6 +37,7 @@ func TestCatalogResolvesProgramAliasFromDataset(t *testing.T) {
 		t.Fatalf("new catalog: %v", err)
 	}
 
+	catalog.aliases["deadlift"] = Alias{ProgramKey: "deadlift", ProgramName: "Становая тяга", DatasetID: "0032", Status: StatusConfirmed}
 	details, ok := catalog.Details("deadlift")
 	if !ok {
 		t.Fatal("expected deadlift alias")

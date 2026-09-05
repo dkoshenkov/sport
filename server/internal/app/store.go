@@ -17,6 +17,7 @@ type Session struct {
 }
 
 type Store interface {
+	ProgramOptions(context.Context) (*api.ProgramOptionsResponse, error)
 	CreateUser(ctx context.Context, nickname, passwordHash string) (api.User, error)
 	UserByNickname(ctx context.Context, nickname string) (api.User, string, bool, error)
 	UserByID(ctx context.Context, id uuid.UUID) (api.User, bool, error)

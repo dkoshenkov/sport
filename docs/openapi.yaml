@@ -500,6 +500,18 @@ paths:
         - $ref: "#/components/parameters/LimitQuery"
         - $ref: "#/components/parameters/OffsetQuery"
         - $ref: "#/components/parameters/HasImageQuery"
+        - name: muscle
+          in: query
+          schema:
+            type: string
+        - name: equipment
+          in: query
+          schema:
+            type: string
+        - name: bodyPart
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Exercise catalog results
@@ -1361,7 +1373,7 @@ components:
 
     ExerciseCatalogListResponse:
       type: object
-      required: [items, total, limit, offset]
+      required: [items, total, limit, offset, muscles, equipment, bodyParts]
       properties:
         items:
           type: array
@@ -1376,6 +1388,19 @@ components:
         offset:
           type: integer
           minimum: 0
+
+        muscles:
+          type: array
+          items:
+            type: string
+        equipment:
+          type: array
+          items:
+            type: string
+        bodyParts:
+          type: array
+          items:
+            type: string
 
     ExerciseCatalogItemResponse:
       type: object

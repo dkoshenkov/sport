@@ -424,6 +424,8 @@ func (*CalculateProgramUnauthorized) calculateProgramRes() {}
 
 // Ref: #/components/schemas/CheckpointCompletedData
 type CheckpointCompletedData struct {
+	// Number of completed sets tracked for this checkpoint. Reaching the prescribed set count marks the
+	// checkpoint as done.
 	Sets     OptNilInt     `json:"sets"`
 	RepsText OptNilString  `json:"repsText"`
 	WeightKg OptNilFloat64 `json:"weightKg"`
@@ -908,10 +910,13 @@ func (*ExerciseCatalogItemResponse) getCatalogExerciseRes() {}
 
 // Ref: #/components/schemas/ExerciseCatalogListResponse
 type ExerciseCatalogListResponse struct {
-	Items  []ExerciseCatalogItem `json:"items"`
-	Total  int                   `json:"total"`
-	Limit  int                   `json:"limit"`
-	Offset int                   `json:"offset"`
+	Items     []ExerciseCatalogItem `json:"items"`
+	Total     int                   `json:"total"`
+	Limit     int                   `json:"limit"`
+	Offset    int                   `json:"offset"`
+	Muscles   []string              `json:"muscles"`
+	Equipment []string              `json:"equipment"`
+	BodyParts []string              `json:"bodyParts"`
 }
 
 // GetItems returns the value of Items.
@@ -934,6 +939,21 @@ func (s *ExerciseCatalogListResponse) GetOffset() int {
 	return s.Offset
 }
 
+// GetMuscles returns the value of Muscles.
+func (s *ExerciseCatalogListResponse) GetMuscles() []string {
+	return s.Muscles
+}
+
+// GetEquipment returns the value of Equipment.
+func (s *ExerciseCatalogListResponse) GetEquipment() []string {
+	return s.Equipment
+}
+
+// GetBodyParts returns the value of BodyParts.
+func (s *ExerciseCatalogListResponse) GetBodyParts() []string {
+	return s.BodyParts
+}
+
 // SetItems sets the value of Items.
 func (s *ExerciseCatalogListResponse) SetItems(val []ExerciseCatalogItem) {
 	s.Items = val
@@ -952,6 +972,21 @@ func (s *ExerciseCatalogListResponse) SetLimit(val int) {
 // SetOffset sets the value of Offset.
 func (s *ExerciseCatalogListResponse) SetOffset(val int) {
 	s.Offset = val
+}
+
+// SetMuscles sets the value of Muscles.
+func (s *ExerciseCatalogListResponse) SetMuscles(val []string) {
+	s.Muscles = val
+}
+
+// SetEquipment sets the value of Equipment.
+func (s *ExerciseCatalogListResponse) SetEquipment(val []string) {
+	s.Equipment = val
+}
+
+// SetBodyParts sets the value of BodyParts.
+func (s *ExerciseCatalogListResponse) SetBodyParts(val []string) {
+	s.BodyParts = val
 }
 
 func (*ExerciseCatalogListResponse) listExercisesRes() {}
@@ -2465,6 +2500,7 @@ type Password string
 
 // Ref: #/components/schemas/Prescription
 type Prescription struct {
+	// Number of prescribed sets when the exercise has a trackable set count.
 	Sets         OptNilInt     `json:"sets"`
 	SetsRepsText string        `json:"setsRepsText"`
 	WeightKg     OptNilFloat64 `json:"weightKg"`
@@ -2503,14 +2539,14 @@ func (s *Prescription) GetUnit() OptNilString {
 	return s.Unit
 }
 
-// SetSetsRepsText sets the value of SetsRepsText.
-func (s *Prescription) SetSetsRepsText(val string) {
-	s.SetsRepsText = val
-}
-
 // SetSets sets the value of Sets.
 func (s *Prescription) SetSets(val OptNilInt) {
 	s.Sets = val
+}
+
+// SetSetsRepsText sets the value of SetsRepsText.
+func (s *Prescription) SetSetsRepsText(val string) {
+	s.SetsRepsText = val
 }
 
 // SetWeightKg sets the value of WeightKg.

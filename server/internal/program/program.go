@@ -11,46 +11,30 @@ import (
 
 const FormulaVersion = "xlsx-linear-cycle-v1"
 
-type ExerciseOption struct {
-	ID    string
-	Label string
+type Calculator struct {
+	options *api.ProgramOptionsResponse
+	labels  map[string]string
 }
 
-func Options() *api.ProgramOptionsResponse {
-	return &api.ProgramOptionsResponse{
-		Weeks: []api.SelectOption{
-			option("week_1", "Неделя 1"), option("week_2", "Неделя 2"),
-			option("week_3", "Неделя 3"), option("week_4", "Неделя 4"),
-			option("week_5", "Неделя 5"), option("week_6", "Неделя 6"),
-			option("week_7", "Неделя 7"), option("week_8", "Неделя 8"),
-		},
-		Variants: []api.SelectOption{
-			option("variant_1", "Вариант 1"),
-			option("variant_2", "Вариант 2"),
-		},
-		ProgressionSteps: []api.SelectOption{
-			option("step_4_percent", "4% от 1ПМ"),
-			option("step_5_percent", "5% от 1ПМ"),
-		},
-		Assistance: api.AssistanceOptions{
-			Deadlift: toAPIOptions(deadliftAssistance),
-			Bench:    toAPIOptions(benchAssistance),
-			Squat:    toAPIOptions(squatAssistance),
-		},
-		Gpp: api.GPPOptions{
-			Abs:            toAPIOptions(withSkip(gppAbs)),
-			Triceps:        toAPIOptions(withSkip(gppTriceps)),
-			HorizontalPull: toAPIOptions(withSkip(gppHorizontalPull)),
-			Biceps:         toAPIOptions(withSkip(gppBiceps)),
-			VerticalPull:   toAPIOptions(withSkip(gppVerticalPull)),
-			OverheadPress:  toAPIOptions(withSkip(gppOverheadPress)),
-		},
+func NewCalculator(options *api.ProgramOptionsResponse) *Calculator {
+	labels := map[string]string{"deadlift": "Становая тяга", "bench_press": "Жим лежа", "squat": "Приседания"}
+	for _, group := range optionGroups(options) {
+		for _, opt := range group {
+			if opt.ID != "" {
+				labels[opt.ID] = opt.Label
+			}
+		}
 	}
+	return &Calculator{options: options, labels: labels}
 }
 
-func Calculate(selection api.ProgramSelection) (*api.TrainingPlanResponse, error) {
+func optionGroups(o *api.ProgramOptionsResponse) [][]api.SelectOption {
+	return [][]api.SelectOption{o.Assistance.Deadlift, o.Assistance.Bench, o.Assistance.Squat, o.Gpp.Abs, o.Gpp.Triceps, o.Gpp.HorizontalPull, o.Gpp.Biceps, o.Gpp.VerticalPull, o.Gpp.OverheadPress}
+}
+
+func (c *Calculator) Calculate(selection api.ProgramSelection) (*api.TrainingPlanResponse, error) {
 	settings := normalizeSettings(selection.Settings)
-	if err := validateSettings(settings); err != nil {
+	if err := c.validateSettings(settings); err != nil {
 		return nil, err
 	}
 	week := selection.Week
@@ -63,9 +47,9 @@ func Calculate(selection api.ProgramSelection) (*api.TrainingPlanResponse, error
 			Rows: compactRows([]api.TrainingRow{
 				heavyRow("day_1_deadlift", "deadlift", "Становая тяга", settings.OneRepMaxKg.Deadlift, settings, week),
 				lightRow("day_1_bench", "bench_press", "Жим лежа", settings.OneRepMaxKg.Bench, week, true),
-				assistanceRow("day_1_deadlift_assistance", settings.Assistance.Deadlift, week, settings.Assistance.Deadlift == "paused_deadlift"),
-				gppPullRow("day_1_horizontal_pull", settings.Gpp.HorizontalPull, week),
-				gppArmRow("day_1_biceps", settings.Gpp.Biceps, week),
+				c.assistanceRow("day_1_deadlift_assistance", settings.Assistance.Deadlift, week, settings.Assistance.Deadlift == "paused_deadlift"),
+				c.gppPullRow("day_1_horizontal_pull", settings.Gpp.HorizontalPull, week),
+				c.gppArmRow("day_1_biceps", settings.Gpp.Biceps, week),
 			}),
 		},
 		{
@@ -75,9 +59,9 @@ func Calculate(selection api.ProgramSelection) (*api.TrainingPlanResponse, error
 			Rows: compactRows([]api.TrainingRow{
 				heavyRow("day_2_bench", "bench_press", "Жим лежа", settings.OneRepMaxKg.Bench, settings, week),
 				lightRow("day_2_squat", "squat", "Приседания", settings.OneRepMaxKg.Squat, week, false),
-				assistanceRow("day_2_bench_assistance", settings.Assistance.Bench, week, false),
-				gppSimpleRow("day_2_abs", settings.Gpp.Abs, week, "3x6-10", "RPE: 7"),
-				gppArmRow("day_2_triceps", settings.Gpp.Triceps, week),
+				c.assistanceRow("day_2_bench_assistance", settings.Assistance.Bench, week, false),
+				c.gppSimpleRow("day_2_abs", settings.Gpp.Abs, week, "3x6-10", "RPE: 7"),
+				c.gppArmRow("day_2_triceps", settings.Gpp.Triceps, week),
 			}),
 		},
 		{
@@ -87,9 +71,9 @@ func Calculate(selection api.ProgramSelection) (*api.TrainingPlanResponse, error
 			Rows: compactRows([]api.TrainingRow{
 				heavyRow("day_3_squat", "squat", "Приседания", settings.OneRepMaxKg.Squat, settings, week),
 				lightRow("day_3_deadlift", "deadlift", "Становая тяга", settings.OneRepMaxKg.Deadlift, week, false),
-				assistanceRow("day_3_squat_assistance", settings.Assistance.Squat, week, false),
-				gppPullRow("day_3_vertical_pull", settings.Gpp.VerticalPull, week),
-				gppSimpleRow("day_3_overhead_press", settings.Gpp.OverheadPress, week, "3x6-10", overheadPressRPE(week)),
+				c.assistanceRow("day_3_squat_assistance", settings.Assistance.Squat, week, false),
+				c.gppPullRow("day_3_vertical_pull", settings.Gpp.VerticalPull, week),
+				c.gppSimpleRow("day_3_overhead_press", settings.Gpp.OverheadPress, week, "3x6-10", overheadPressRPE(week)),
 			}),
 		},
 	}
@@ -149,31 +133,28 @@ func progressionStep(oneRepMax float64, step api.ProgressionStep) float64 {
 	return roundToNearest2_5(oneRepMax * 0.04)
 }
 
-func validateSettings(settings api.CycleSettings) error {
+func (c *Calculator) validateSettings(settings api.CycleSettings) error {
 	if settings.OneRepMaxKg.Deadlift <= 0 || settings.OneRepMaxKg.Bench <= 0 || settings.OneRepMaxKg.Squat <= 0 {
 		return fmt.Errorf("one-rep max values must be positive")
 	}
-	for _, key := range []string{settings.Assistance.Deadlift, settings.Assistance.Bench, settings.Assistance.Squat} {
-		if _, ok := optionLabels[key]; !ok {
-			return fmt.Errorf("unknown exercise option %q", key)
-		}
-	}
-	for _, opt := range []api.NilString{
-		settings.Gpp.Abs,
-		settings.Gpp.Triceps,
-		settings.Gpp.HorizontalPull,
-		settings.Gpp.Biceps,
-		settings.Gpp.VerticalPull,
-		settings.Gpp.OverheadPress,
-	} {
-		key, ok := opt.Get()
-		if !ok || key == "" || key == "-" {
+	keys := []string{settings.Assistance.Deadlift, settings.Assistance.Bench, settings.Assistance.Squat, settings.Gpp.Abs.Or(""), settings.Gpp.Triceps.Or(""), settings.Gpp.HorizontalPull.Or(""), settings.Gpp.Biceps.Or(""), settings.Gpp.VerticalPull.Or(""), settings.Gpp.OverheadPress.Or("")}
+	for i, group := range optionGroups(c.options) {
+		key := keys[i]
+		if i >= 3 && (key == "" || key == "-") {
 			continue
 		}
-		if _, exists := optionLabels[key]; !exists {
-			return fmt.Errorf("unknown gpp option %q", key)
+		found := false
+		for _, opt := range group {
+			if opt.ID == key && key != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("exercise %q is not allowed in selection group %d", key, i)
 		}
 	}
+
 	return nil
 }
 
@@ -226,7 +207,7 @@ func lightRow(rowID, key, name string, oneRepMax float64, week api.ProgramWeek, 
 	})
 }
 
-func assistanceRow(rowID, key string, week api.ProgramWeek, forcePausedDeadliftPattern bool) api.TrainingRow {
+func (c *Calculator) assistanceRow(rowID, key string, week api.ProgramWeek, forcePausedDeadliftPattern bool) api.TrainingRow {
 	if week == api.ProgramWeekWeek8 || key == "" {
 		return api.TrainingRow{}
 	}
@@ -241,13 +222,13 @@ func assistanceRow(rowID, key string, week api.ProgramWeek, forcePausedDeadliftP
 		setsReps = "2x3"
 		rpe = "RPE: 5"
 	}
-	return row(rowID, key, label(key), api.TrainingRowKindAssistance, api.Prescription{
+	return row(rowID, key, c.label(key), api.TrainingRowKindAssistance, api.Prescription{
 		SetsRepsText: setsReps,
 		RpeText:      api.NewOptNilString(rpe),
 	})
 }
 
-func gppPullRow(rowID string, opt api.NilString, week api.ProgramWeek) api.TrainingRow {
+func (c *Calculator) gppPullRow(rowID string, opt api.NilString, week api.ProgramWeek) api.TrainingRow {
 	key, ok := opt.Get()
 	if week == api.ProgramWeekWeek8 || !ok || key == "" || key == "-" {
 		return api.TrainingRow{}
@@ -258,13 +239,13 @@ func gppPullRow(rowID string, opt api.NilString, week api.ProgramWeek) api.Train
 		setsReps = "2x5-6"
 		rpe = "RPE: 6"
 	}
-	return row(rowID, key, label(key), api.TrainingRowKindGpp, api.Prescription{
+	return row(rowID, key, c.label(key), api.TrainingRowKindGpp, api.Prescription{
 		SetsRepsText: setsReps,
 		RpeText:      api.NewOptNilString(rpe),
 	})
 }
 
-func gppArmRow(rowID string, opt api.NilString, week api.ProgramWeek) api.TrainingRow {
+func (c *Calculator) gppArmRow(rowID string, opt api.NilString, week api.ProgramWeek) api.TrainingRow {
 	key, ok := opt.Get()
 	if week == api.ProgramWeekWeek8 || !ok || key == "" || key == "-" {
 		return api.TrainingRow{}
@@ -274,18 +255,18 @@ func gppArmRow(rowID string, opt api.NilString, week api.ProgramWeek) api.Traini
 	if week == api.ProgramWeekWeek7 {
 		rpe = "RPE: 6"
 	}
-	return row(rowID, key, label(key), api.TrainingRowKindGpp, api.Prescription{
+	return row(rowID, key, c.label(key), api.TrainingRowKindGpp, api.Prescription{
 		SetsRepsText: fmt.Sprintf("%dx6-12", sets),
 		RpeText:      api.NewOptNilString(rpe),
 	})
 }
 
-func gppSimpleRow(rowID string, opt api.NilString, week api.ProgramWeek, setsReps, rpe string) api.TrainingRow {
+func (c *Calculator) gppSimpleRow(rowID string, opt api.NilString, week api.ProgramWeek, setsReps, rpe string) api.TrainingRow {
 	key, ok := opt.Get()
 	if week == api.ProgramWeekWeek8 || !ok || key == "" || key == "-" {
 		return api.TrainingRow{}
 	}
-	return row(rowID, key, label(key), api.TrainingRowKindGpp, api.Prescription{
+	return row(rowID, key, c.label(key), api.TrainingRowKindGpp, api.Prescription{
 		SetsRepsText: setsReps,
 		RpeText:      api.NewOptNilString(rpe),
 	})
@@ -318,27 +299,8 @@ func prescribedSets(setsRepsText string) api.OptNilInt {
 	return api.NewOptNilInt(sets)
 }
 
-func option(id, label string) api.SelectOption {
-	return api.SelectOption{ID: id, Label: label}
-}
-
-func toAPIOptions(items []ExerciseOption) []api.SelectOption {
-	out := make([]api.SelectOption, 0, len(items))
-	for _, item := range items {
-		out = append(out, option(item.ID, item.Label))
-	}
-	return out
-}
-
-func withSkip(items []ExerciseOption) []ExerciseOption {
-	out := make([]ExerciseOption, 0, len(items)+1)
-	out = append(out, ExerciseOption{ID: "", Label: "-"})
-	out = append(out, items...)
-	return out
-}
-
-func label(key string) string {
-	if v, ok := optionLabels[key]; ok {
+func (c *Calculator) label(key string) string {
+	if v, ok := c.labels[key]; ok {
 		return v
 	}
 	return key
@@ -440,53 +402,6 @@ var armSetsByWeek = map[api.ProgramWeek]int{
 	api.ProgramWeekWeek7: 3,
 }
 
-var deadliftAssistance = []ExerciseOption{
-	{"good_morning", "Гуд-морнинг"},
-	{"romanian_deadlift", "Румынская тяга"},
-	{"deficit_deadlift", "Тяга из ямы"},
-	{"deadlift", "Классическая становая тяга"},
-	{"sumo_deadlift", "Становая тяга сумо"},
-	{"paused_deadlift", "Становая тяга с паузами"},
-}
-
-var benchAssistance = []ExerciseOption{
-	{"close_grip_bench", "Жим узким хватом"},
-	{"reverse_grip_bench", "Жим обратным хватом"},
-	{"incline_bench", "Жим на наклонной скамье"},
-	{"dumbbell_bench", "Жим гантелей лежа"},
-	{"dips", "Брусья"},
-}
-
-var squatAssistance = []ExerciseOption{
-	{"zercher_squat", "Приседания Зерчера"},
-	{"front_squat", "Приседания со штангой на груди"},
-	{"high_bar_squat", "Приседания с высоким грифом"},
-	{"low_bar_squat", "Приседания с низким грифом"},
-	{"bulgarian_split_squat", "Болгарские сплит-приседания"},
-}
-
-var gppAbs = []ExerciseOption{{"abs", "Упражнение на пресс"}}
-var gppTriceps = []ExerciseOption{{"triceps", "Трицепс"}}
-var gppHorizontalPull = []ExerciseOption{
-	{"barbell_row", "Тяга штанги в наклоне"},
-	{"cable_seated_row", "Горизонтальный блок"},
-	{"dumbbell_row", "Тяга гантели в наклоне"},
-	{"lever_horizontal_row", "Рычажная горизонтальная тяга"},
-}
-var gppBiceps = []ExerciseOption{{"biceps", "Бицепс"}}
-var gppVerticalPull = []ExerciseOption{
-	{"pull_up", "Подтягивания"},
-	{"lat_pulldown", "Вертикальный блок"},
-	{"lever_vertical_row", "Рычажная вертикальная тяга"},
-}
-var gppOverheadPress = []ExerciseOption{
-	{"dumbbell_military_press", "Армейский жим гантелей"},
-	{"handstand_push_up", "Отжимания в стойке на руках"},
-	{"kettlebell_military_press", "Армейский жим гирь"},
-	{"one_arm_military_press", "Армейский жим одной рукой"},
-	{"barbell_military_press", "Армейский жим штанги"},
-}
-
 var compatibilityKeys = map[string]string{
 	"close_grip_bench_press":    "close_grip_bench",
 	"reverse_grip_bench_press":  "reverse_grip_bench",
@@ -501,18 +416,3 @@ var compatibilityKeys = map[string]string{
 	"one_arm_overhead_press":    "one_arm_military_press",
 	"barbell_overhead_press":    "barbell_military_press",
 }
-
-var optionLabels = func() map[string]string {
-	sets := [][]ExerciseOption{
-		deadliftAssistance, benchAssistance, squatAssistance,
-		gppAbs, gppTriceps, gppHorizontalPull, gppBiceps, gppVerticalPull, gppOverheadPress,
-		{{"deadlift", "Становая тяга"}, {"bench_press", "Жим лежа"}, {"squat", "Приседания"}},
-	}
-	out := make(map[string]string)
-	for _, set := range sets {
-		for _, opt := range set {
-			out[opt.ID] = opt.Label
-		}
-	}
-	return out
-}()

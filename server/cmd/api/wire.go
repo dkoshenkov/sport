@@ -7,13 +7,14 @@ import (
 	"context"
 
 	"github.com/goforj/wire"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"sport/server/internal/app"
 	"sport/server/internal/exercises"
 )
 
-func newCatalog(cfg app.Config) (*exercises.Catalog, error) {
-	return exercises.NewCatalog(cfg.Exercises.DatasetDir)
+func newCatalog(ctx context.Context, cfg app.Config, pool *pgxpool.Pool) (exercises.Repository, error) {
+	return exercises.NewPostgresCatalog(ctx, pool, cfg.Exercises.DatasetDir)
 }
 
 var applicationSet = wire.NewSet(

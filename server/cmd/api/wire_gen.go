@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"github.com/goforj/wire"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"sport/server/internal/app"
 	"sport/server/internal/exercises"
 )
@@ -29,12 +30,12 @@ func initializeApplication(ctx context.Context) (*application, func(), error) {
 		return nil, nil, err
 	}
 	postgresStore := app.NewPostgresStore(pool)
-	catalog, err := newCatalog(config)
+	repository, err := newCatalog(ctx, config, pool)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	handler := app.NewHandler(postgresStore, catalog)
+	handler := app.NewHandler(postgresStore, repository)
 	security := app.NewSecurity(postgresStore)
 	server, err := newHTTPServer(config, logger, handler, security)
 	if err != nil {
@@ -52,8 +53,8 @@ func initializeApplication(ctx context.Context) (*application, func(), error) {
 
 // wire.go:
 
-func newCatalog(cfg app.Config) (*exercises.Catalog, error) {
-	return exercises.NewCatalog(cfg.Exercises.DatasetDir)
+func newCatalog(ctx context.Context, cfg app.Config, pool *pgxpool.Pool) (exercises.Repository, error) {
+	return exercises.NewPostgresCatalog(ctx, pool, cfg.Exercises.DatasetDir)
 }
 
 var applicationSet = wire.NewSet(app.LoadConfig, newLogger, app.NewPostgresPool, newCatalog, app.NewPostgresStore, wire.Bind(new(app.Store), new(*app.PostgresStore)), app.NewHandler, app.NewSecurity, newHTTPServer, wire.Struct(new(application), "*"))

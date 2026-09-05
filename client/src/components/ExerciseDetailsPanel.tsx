@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ExerciseTags } from './ExerciseTags'
 import { getExerciseDetails, type ExerciseDetails } from '../app/api'
 
 type ExerciseDetailsPanelProps = {
@@ -14,6 +15,7 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
   useEffect(() => {
     let cancelled = false
     setIsLoading(true)
+    setDetails(null)
     setError('')
     getExerciseDetails(exerciseKey)
       .then((exercise) => {
@@ -37,7 +39,7 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
   }, [exerciseKey, onUnauthorized])
 
   return (
-    <aside className="border border-slate-200 bg-white lg:sticky lg:top-4" aria-labelledby="exercise-details-title">
+    <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4" aria-labelledby="exercise-details-title">
       <div className="border-b border-slate-200 px-4 py-3">
         <h2 id="exercise-details-title" className="text-balance text-base font-semibold text-slate-950">
           Детали упражнения
@@ -92,16 +94,11 @@ export function ExerciseDetailsPanel({ exerciseKey, onUnauthorized }: ExerciseDe
 function ExerciseMetadata({ details }: { details: ExerciseDetails }) {
   return (
     <>
-      <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-sm">
-        <dt className="font-medium text-slate-600">Dataset</dt>
-        <dd className="text-slate-950">{details.datasetName ?? details.datasetExerciseId ?? 'Нет соответствия'}</dd>
-        <dt className="font-medium text-slate-600">Оборуд.</dt>
-        <dd className="text-slate-950">{details.equipment ?? 'Не указано'}</dd>
-        <dt className="font-medium text-slate-600">Цель</dt>
-        <dd className="text-slate-950">{details.targetMuscles?.join(', ') || 'Не указано'}</dd>
-        <dt className="font-medium text-slate-600">Доп.</dt>
-        <dd className="text-slate-950">{details.secondaryMuscles?.join(', ') || 'Не указано'}</dd>
-      </dl>
+      <div className="space-y-4">
+        <div><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Основные мышцы</h3><ExerciseTags primary={details.targetMuscles ?? []} /></div>
+        {!!details.secondaryMuscles?.length && <div><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Также работают</h3><ExerciseTags primary={[]} secondary={details.secondaryMuscles} /></div>}
+        <ExerciseTags primary={[]} equipment={details.equipment} />
+      </div>
       {details.instructions?.length ? (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-slate-950">Инструкция</h3>
@@ -114,7 +111,7 @@ function ExerciseMetadata({ details }: { details: ExerciseDetails }) {
       ) : null}
       {details.aliasStatus !== 'confirmed' ? (
         <p className="text-pretty border-l-2 border-amber-500 pl-3 text-xs leading-5 text-slate-600">
-          Соответствие с dataset требует проверки.
+          Демонстрация может отличаться от варианта упражнения в программе.
         </p>
       ) : null}
     </>

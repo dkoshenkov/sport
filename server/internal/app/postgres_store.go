@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sport/server/internal/program"
 	"time"
 
 	"github.com/google/uuid"
@@ -909,4 +911,16 @@ func timeToOptNil(value pgtype.Timestamptz) api.OptNilDateTime {
 	var out api.OptNilDateTime
 	out.SetToNull()
 	return out
+}
+
+func (s *PostgresStore) ProgramOptions(ctx context.Context) (*api.ProgramOptionsResponse, error) {
+	var data []byte
+	if err := s.pool.QueryRow(ctx, `SELECT options FROM program_options WHERE id=$1`, program.FormulaVersion).Scan(&data); err != nil {
+		return nil, err
+	}
+	var options api.ProgramOptionsResponse
+	if err := json.Unmarshal(data, &options); err != nil {
+		return nil, err
+	}
+	return &options, nil
 }

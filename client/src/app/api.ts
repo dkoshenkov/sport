@@ -178,6 +178,9 @@ export type ExerciseCatalogItem = {
 }
 
 export type ExerciseCatalogResponse = {
+  muscles: string[]
+  equipment: string[]
+  bodyParts: string[]
   items: ExerciseCatalogItem[]
   total: number
   limit: number
@@ -349,12 +352,15 @@ export async function getExerciseDetails(exerciseKey: string): Promise<ExerciseD
   return data.exercise
 }
 
-export async function listExercises(params: { query?: string; hasImage?: boolean; limit?: number; offset?: number } = {}): Promise<ExerciseCatalogResponse> {
+export async function listExercises(params: { query?: string; muscle?: string; equipment?: string; bodyPart?: string; hasImage?: boolean; limit?: number; offset?: number } = {}): Promise<ExerciseCatalogResponse> {
   const search = new URLSearchParams()
   if (params.query) search.set('query', params.query)
   if (params.hasImage) search.set('hasImage', 'true')
   if (params.limit) search.set('limit', String(params.limit))
   if (params.offset) search.set('offset', String(params.offset))
+  if (params.muscle) search.set('muscle', params.muscle)
+  if (params.equipment) search.set('equipment', params.equipment)
+  if (params.bodyPart) search.set('bodyPart', params.bodyPart)
   const suffix = search.toString() ? `?${search.toString()}` : ''
   return request<ExerciseCatalogResponse>(`/v1/exercises${suffix}`)
 }

@@ -32,10 +32,10 @@ type userContextKey struct{}
 
 type Handler struct {
 	store   Store
-	catalog *exercises.Catalog
+	catalog exercises.Repository
 }
 
-func NewHandler(store Store, catalog *exercises.Catalog) *Handler {
+func NewHandler(store Store, catalog exercises.Repository) *Handler {
 	return &Handler{store: store, catalog: catalog}
 }
 
@@ -170,12 +170,16 @@ func (h *Handler) PutMyProfile(ctx context.Context, req *api.PutAthleteProfileRe
 }
 
 func (h *Handler) GetProgramOptions(ctx context.Context) (api.GetProgramOptionsRes, error) {
-	return program.Options(), nil
+	return h.store.ProgramOptions(ctx)
 }
 
 func (h *Handler) CalculateProgram(ctx context.Context, req *api.CalculateProgramRequest) (api.CalculateProgramRes, error) {
-	plan, err := program.Calculate(req.Selection)
+	plan, err := h.calculate(ctx, req.Selection)
 	if err != nil {
+		var referenceErr programReferenceError
+		if errors.As(err, &referenceErr) {
+			return nil, err
+		}
 		return &api.CalculateProgramBadRequest{Error: errorBody("validation_error", err.Error())}, nil
 	}
 	return plan, nil
@@ -204,7 +208,11 @@ func (h *Handler) CreateCycle(ctx context.Context, req *api.PutCurrentCycleReque
 	if err != nil {
 		return &api.CreateCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
 	}
-	if _, err := program.Calculate(api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+	if _, err := h.calculate(ctx, api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+		var referenceErr programReferenceError
+		if errors.As(err, &referenceErr) {
+			return nil, err
+		}
 		return &api.CreateCycleBadRequest{Error: errorBody("validation_error", err.Error())}, nil
 	}
 	cycle, err := h.store.CreateCycle(ctx, user.ID, req.Title, req.CurrentWeek, req.Settings)
@@ -219,7 +227,11 @@ func (h *Handler) PutCycle(ctx context.Context, req *api.PutCurrentCycleRequest,
 	if err != nil {
 		return &api.PutCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
 	}
-	if _, err := program.Calculate(api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+	if _, err := h.calculate(ctx, api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+		var referenceErr programReferenceError
+		if errors.As(err, &referenceErr) {
+			return nil, err
+		}
 		return &api.PutCycleBadRequest{Error: errorBody("validation_error", err.Error())}, nil
 	}
 	cycle, ok, err := h.store.SaveCycle(ctx, user.ID, params.CycleId, req.Title, req.CurrentWeek, req.Settings)
@@ -267,7 +279,11 @@ func (h *Handler) PutCurrentCycle(ctx context.Context, req *api.PutCurrentCycleR
 	if err != nil {
 		return &api.PutCurrentCycleUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
 	}
-	if _, err := program.Calculate(api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+	if _, err := h.calculate(ctx, api.ProgramSelection{Settings: req.Settings, Week: req.CurrentWeek}); err != nil {
+		var referenceErr programReferenceError
+		if errors.As(err, &referenceErr) {
+			return nil, err
+		}
 		return &api.PutCurrentCycleBadRequest{Error: errorBody("validation_error", err.Error())}, nil
 	}
 	cycle, err := h.store.SaveCurrentCycle(ctx, user.ID, req.Title, req.CurrentWeek, req.Settings)
@@ -304,7 +320,7 @@ func (h *Handler) GetCurrentCyclePlan(ctx context.Context) (api.GetCurrentCycleP
 	if !ok {
 		return &api.GetCurrentCyclePlanNotFound{Error: errorBody("not_found", "active cycle not found")}, nil
 	}
-	plan, err := program.Calculate(api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
+	plan, err := h.calculate(ctx, api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +365,7 @@ func (h *Handler) UpsertCurrentCycleCheckpoint(ctx context.Context, req *api.Ups
 	if req.Checkpoint.Week != cycle.CurrentWeek {
 		return &api.UpsertCurrentCycleCheckpointBadRequest{Error: errorBody("validation_error", "checkpoint week must match current cycle week")}, nil
 	}
-	plan, err := program.Calculate(api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
+	plan, err := h.calculate(ctx, api.ProgramSelection{Settings: cycle.Settings, Week: cycle.CurrentWeek})
 	if err != nil {
 		return nil, err
 	}
@@ -392,15 +408,18 @@ func (h *Handler) ListExercises(ctx context.Context, params api.ListExercisesPar
 	if h.catalog == nil {
 		return nil, errors.New("exercise catalog is not configured")
 	}
-	response := h.catalog.List(params)
-	return &response, nil
+	response, err := h.catalog.Search(ctx, params)
+	return &response, err
 }
 
 func (h *Handler) GetCatalogExercise(ctx context.Context, params api.GetCatalogExerciseParams) (api.GetCatalogExerciseRes, error) {
 	if _, err := h.currentUser(ctx); err != nil {
 		return &api.GetCatalogExerciseUnauthorized{Error: errorBody("unauthorized", "missing or invalid session")}, nil
 	}
-	exercise, ok := h.catalog.CatalogExercise(params.DatasetExerciseId)
+	exercise, ok, err := h.catalog.Get(ctx, params.DatasetExerciseId)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return &api.GetCatalogExerciseNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}
@@ -411,7 +430,10 @@ func (h *Handler) GetExerciseDetails(ctx context.Context, params api.GetExercise
 	if h.catalog == nil {
 		return &api.GetExerciseDetailsNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}
-	details, ok := h.catalog.Details(params.ExerciseKey)
+	details, ok, err := h.catalog.GetDetails(ctx, params.ExerciseKey)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return &api.GetExerciseDetailsNotFound{Error: errorBody("not_found", "exercise not found")}, nil
 	}
@@ -539,4 +561,14 @@ func newToken() (string, error) {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+type programReferenceError struct{ error }
+
+func (h *Handler) calculate(ctx context.Context, selection api.ProgramSelection) (*api.TrainingPlanResponse, error) {
+	options, err := h.store.ProgramOptions(ctx)
+	if err != nil {
+		return nil, programReferenceError{err}
+	}
+	return program.NewCalculator(options).Calculate(selection)
 }

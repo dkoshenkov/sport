@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,8 +35,9 @@ func TestRegisterHashesPasswordAndSetsSessionCookie(t *testing.T) {
 	if !ok || !strings.Contains(cookie, "sid=") || !strings.Contains(cookie, "HttpOnly") {
 		t.Fatalf("SetCookie = %q, ok = %v; want sid HttpOnly cookie", cookie, ok)
 	}
-	if !strings.Contains(cookie, "Max-Age=2592000") {
-		t.Fatalf("SetCookie = %q; want Max-Age=2592000", cookie)
+	parsed := (&http.Response{Header: http.Header{"Set-Cookie": []string{cookie}}}).Cookies()
+	if len(parsed) != 1 || time.Until(parsed[0].Expires) < sessionTTL-time.Minute || time.Until(parsed[0].Expires) > sessionTTL {
+		t.Fatalf("invalid session expiration: %s", cookie)
 	}
 	if !strings.Contains(cookie, "Expires=") {
 		t.Fatalf("SetCookie = %q; want Expires attribute", cookie)
@@ -186,7 +188,7 @@ func TestUpsertCheckpointAdvancesCycleAfterEveryPlanRowIsDone(t *testing.T) {
 		Settings:    testCycleSettings(),
 	}}
 	handler := NewHandler(store, nil)
-	plan, err := program.Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek1})
+	plan, err := program.NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +227,7 @@ func TestUpsertCheckpointCompletesCycleAfterWeekEight(t *testing.T) {
 		Settings:    testCycleSettings(),
 	}}
 	handler := NewHandler(store, nil)
-	plan, err := program.Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek8})
+	plan, err := program.NewCalculator(testProgramOptions()).Calculate(api.ProgramSelection{Settings: testCycleSettings(), Week: api.ProgramWeekWeek8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +280,7 @@ func TestActivateCycleArchivesPreviousActive(t *testing.T) {
 
 func TestGetExerciseDetailsReadsCatalog(t *testing.T) {
 	store := newFakeStore()
-	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
+	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"), exercises.Alias{ProgramKey: "reverse_grip_bench", ProgramName: "Жим обратным хватом", DatasetID: "2187", Status: exercises.StatusNeedsReview}, exercises.Alias{ProgramKey: "close_grip_bench", ProgramName: "Жим узким хватом", DatasetID: "0030", Status: exercises.StatusNeedsReview})
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
@@ -303,7 +305,7 @@ func TestGetExerciseDetailsReadsCatalog(t *testing.T) {
 func TestListExercisesReadsDatasetAndProgramAliases(t *testing.T) {
 	store := newFakeStore()
 	store.user = api.User{ID: uuid.New(), Nickname: "athlete_1", CreatedAt: time.Now()}
-	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"))
+	catalog, err := exercises.NewCatalog(filepath.Join("..", "..", "..", "exercises-dataset-main"), exercises.Alias{ProgramKey: "reverse_grip_bench", ProgramName: "Жим обратным хватом", DatasetID: "2187", Status: exercises.StatusNeedsReview}, exercises.Alias{ProgramKey: "close_grip_bench", ProgramName: "Жим узким хватом", DatasetID: "0030", Status: exercises.StatusNeedsReview})
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
@@ -549,4 +551,27 @@ func requirementsDone(requirements []ProgressRequirement, checkpoints []api.Prog
 		}
 	}
 	return true
+}
+
+func (s *fakeStore) ProgramOptions(context.Context) (*api.ProgramOptionsResponse, error) {
+	return testProgramOptions(), nil
+}
+
+// Minimal inputs for these unit tests; production options are seeded by SQL.
+func testProgramOptions() *api.ProgramOptionsResponse {
+	return &api.ProgramOptionsResponse{
+		Assistance: api.AssistanceOptions{
+			Deadlift: []api.SelectOption{{ID: "good_morning", Label: "Гуд-морнинг"}, {ID: "paused_deadlift", Label: "Становая тяга с паузами"}},
+			Bench:    []api.SelectOption{{ID: "close_grip_bench", Label: "Жим узким хватом"}},
+			Squat:    []api.SelectOption{{ID: "front_squat", Label: "Фронтальный присед"}},
+		},
+		Gpp: api.GPPOptions{
+			Abs:            []api.SelectOption{{ID: "abs", Label: "Пресс"}},
+			Triceps:        []api.SelectOption{{ID: "triceps", Label: "Трицепс"}},
+			HorizontalPull: []api.SelectOption{{ID: "barbell_row", Label: "Тяга штанги"}},
+			Biceps:         []api.SelectOption{{ID: "biceps", Label: "Бицепс"}},
+			VerticalPull:   []api.SelectOption{{ID: "pull_up", Label: "Подтягивания"}},
+			OverheadPress:  []api.SelectOption{{ID: "barbell_military_press", Label: "Жим над головой"}},
+		},
+	}
 }

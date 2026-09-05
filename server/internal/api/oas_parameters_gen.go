@@ -458,10 +458,13 @@ func decodeListCurrentCycleProgressParams(args [0]string, argsEscaped bool, r *h
 
 // ListExercisesParams is parameters of listExercises operation.
 type ListExercisesParams struct {
-	Query    OptString `json:",omitempty,omitzero"`
-	Limit    OptInt    `json:",omitempty,omitzero"`
-	Offset   OptInt    `json:",omitempty,omitzero"`
-	HasImage OptBool   `json:",omitempty,omitzero"`
+	Query     OptString `json:",omitempty,omitzero"`
+	Limit     OptInt    `json:",omitempty,omitzero"`
+	Offset    OptInt    `json:",omitempty,omitzero"`
+	HasImage  OptBool   `json:",omitempty,omitzero"`
+	Muscle    OptString `json:",omitempty,omitzero"`
+	Equipment OptString `json:",omitempty,omitzero"`
+	BodyPart  OptString `json:",omitempty,omitzero"`
 }
 
 func unpackListExercisesParams(packed middleware.Parameters) (params ListExercisesParams) {
@@ -499,6 +502,33 @@ func unpackListExercisesParams(packed middleware.Parameters) (params ListExercis
 		}
 		if v, ok := packed[key]; ok {
 			params.HasImage = v.(OptBool)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "muscle",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Muscle = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "equipment",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Equipment = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "bodyPart",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.BodyPart = v.(OptString)
 		}
 	}
 	return params
@@ -753,6 +783,129 @@ func decodeListExercisesParams(args [0]string, argsEscaped bool, r *http.Request
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "hasImage",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: muscle.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "muscle",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotMuscleVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotMuscleVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Muscle.SetTo(paramsDotMuscleVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "muscle",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: equipment.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "equipment",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotEquipmentVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotEquipmentVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Equipment.SetTo(paramsDotEquipmentVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "equipment",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: bodyPart.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "bodyPart",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotBodyPartVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotBodyPartVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.BodyPart.SetTo(paramsDotBodyPartVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "bodyPart",
 			In:   "query",
 			Err:  err,
 		}

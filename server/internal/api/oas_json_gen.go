@@ -2870,13 +2870,40 @@ func (s *ExerciseCatalogListResponse) encodeFields(e *jx.Encoder) {
 		e.FieldStart("offset")
 		e.Int(s.Offset)
 	}
+	{
+		e.FieldStart("muscles")
+		e.ArrStart()
+		for _, elem := range s.Muscles {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("equipment")
+		e.ArrStart()
+		for _, elem := range s.Equipment {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("bodyParts")
+		e.ArrStart()
+		for _, elem := range s.BodyParts {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
 }
 
-var jsonFieldsNameOfExerciseCatalogListResponse = [4]string{
+var jsonFieldsNameOfExerciseCatalogListResponse = [7]string{
 	0: "items",
 	1: "total",
 	2: "limit",
 	3: "offset",
+	4: "muscles",
+	5: "equipment",
+	6: "bodyParts",
 }
 
 // Decode decodes ExerciseCatalogListResponse from json.
@@ -2942,6 +2969,66 @@ func (s *ExerciseCatalogListResponse) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"offset\"")
 			}
+		case "muscles":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				s.Muscles = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Muscles = append(s.Muscles, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"muscles\"")
+			}
+		case "equipment":
+			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				s.Equipment = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Equipment = append(s.Equipment, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"equipment\"")
+			}
+		case "bodyParts":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				s.BodyParts = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.BodyParts = append(s.BodyParts, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"bodyParts\"")
+			}
 		default:
 			return d.Skip()
 		}
@@ -2952,7 +3039,7 @@ func (s *ExerciseCatalogListResponse) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00001111,
+		0b01111111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -5817,7 +5904,7 @@ func (s *Prescription) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"sets\"")
 			}
 		case "setsRepsText":
-			requiredBitSet[0] |= 1 << 0
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.SetsRepsText = string(v)
@@ -5878,7 +5965,7 @@ func (s *Prescription) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000001,
+		0b00000010,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

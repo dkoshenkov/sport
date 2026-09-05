@@ -50,13 +50,13 @@ export function WorkspaceShell({
   }
 
   return (
-    <div className="min-h-dvh bg-slate-100 text-slate-950">
+    <div className="min-h-dvh bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-[1480px] px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-500">Training program</p>
-              <h1 className="mt-1 text-xl font-semibold text-slate-950">Рабочая программа</h1>
+              <p className="text-xs font-semibold uppercase text-slate-500">Силовой дневник</p>
+              <h1 className="mt-1 text-xl font-semibold text-slate-950">Тренируйся осознанно</h1>
             </div>
             <div className="flex items-center justify-between gap-3 lg:justify-end">
               <StrengthGreeting nickname={user.nickname} />
@@ -90,7 +90,7 @@ export function WorkspaceShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1480px] px-4 py-4 sm:px-6">
+      <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 sm:py-8">
         {activeTab === 'program' ? (
           cycle && plan ? (
             <ProgramShell
