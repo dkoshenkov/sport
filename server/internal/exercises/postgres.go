@@ -62,6 +62,33 @@ func (c *PostgresCatalog) seed(ctx context.Context, dir string) error {
 			return fmt.Errorf("import exercise %s: %w", item.ID, err)
 		}
 	}
+	// Existing legacy rows were not inserted above. Initialize their media metadata
+	// from their preserved paths; only fill an absent path from the source dataset.
+	rows, err := tx.Query(ctx, `SELECT id, gif_url FROM exercise_catalog`)
+	if err != nil {
+		return err
+	}
+	var mediaItems []datasetExercise
+	for rows.Next() {
+		var item datasetExercise
+		if err = rows.Scan(&item.ID, &item.GIFURL); err != nil {
+			rows.Close()
+			return err
+		}
+		if item.GIFURL == "" {
+			item.GIFURL = source.byDatasetID[item.ID].GIFURL
+		}
+		mediaItems = append(mediaItems, item)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, item := range mediaItems {
+		if _, err = tx.Exec(ctx, `UPDATE exercise_catalog SET gif_url=$2, has_media=$3 WHERE id=$1`, item.ID, item.GIFURL, source.hasMedia(item)); err != nil {
+			return err
+		}
+	}
 	// Resolve imported program references once. Keep unresolved variants explicit.
 	if _, err = tx.Exec(ctx, `UPDATE exercise_aliases a SET dataset_id=(
  SELECT e.id FROM exercise_catalog e
@@ -78,7 +105,7 @@ func (c *PostgresCatalog) seed(ctx context.Context, dir string) error {
 	return tx.Commit(ctx)
 }
 
-const catalogColumns = `e.id,e.name,e.category,e.body_part,e.equipment,e.target,e.secondary_muscles,e.instruction_steps,e.gif_url,
+const catalogColumns = `e.id,e.name,COALESCE(e.category,''),COALESCE(e.body_part,''),COALESCE(e.equipment,''),COALESCE(e.target,''),e.secondary_muscles,e.instruction_steps,e.gif_url,
  COALESCE((SELECT a.program_name FROM exercise_aliases a WHERE a.dataset_id=e.id ORDER BY a.program_key LIMIT 1),'')`
 
 func (c *PostgresCatalog) scan(row pgx.Row) (api.ExerciseCatalogItem, error) {

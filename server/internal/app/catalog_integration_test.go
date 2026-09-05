@@ -47,7 +47,7 @@ func TestPostgresReferenceData(t *testing.T) {
 		}
 	}
 	var versions int
-	if err = pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 3 {
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 4 {
 		t.Fatalf("migrations = %d: %v", versions, err)
 	}
 	dir := filepath.Join("..", "..", "..", "exercises-dataset-main")
@@ -139,7 +139,7 @@ func TestPostgresReferenceData(t *testing.T) {
 			t.Fatalf("migrate existing untracked schema: %v", err)
 		}
 	}
-	if err = pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 3 {
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 4 {
 		t.Fatalf("recovered migration versions=%d: %v", versions, err)
 	}
 	var name string

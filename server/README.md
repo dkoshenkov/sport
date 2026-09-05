@@ -64,7 +64,13 @@ served from the dataset checkout and must remain available for demonstrations.
 
 Migrations run in filename order, record their versions in `schema_migrations`,
 and acquire a transaction advisory lock to serialize concurrent API startups.
-The original idempotent migration is compatible with existing installations.
+`001_legacy_catalog.sql` runs before catalog creation and upgrades the older
+`dataset_exercise_id` / `program_exercise_key` / `program_name_ru` column names.
+PostgreSQL column renames preserve the existing foreign keys, including media
+and translation references. Legacy fields remain intact; GIF paths are copied
+to the new media field. Nullable legacy metadata is handled when reading rows.
+During the initial dataset import, existing exercise data is retained and media
+availability is initialized for both existing and newly imported rows.
 PostgreSQL must include ICU support (as in the project's PostgreSQL 16 image);
 `sport_unicode` makes Russian case-insensitive search independent of OS locale.
 
@@ -82,4 +88,6 @@ TEST_DATABASE_URL='postgres://sport:sport@localhost:35432/sport?sslmode=disable'
 The integration test uses a unique temporary schema and removes it afterward.
 It covers migration replay, dataset import, pagination, filters, Russian search,
 unknown IDs, literal search input, preservation of database edits, and reading
-updated program options during calculation.
+updated program options during calculation. A separate legacy-schema test covers
+column renames, nullable metadata, custom instructions and notes, media paths,
+and preservation of the foreign-key delete actions for media and translations.
